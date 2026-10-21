@@ -138,6 +138,7 @@ function renderPips() {
 
 function setButtons(enabled) {
   ["btn-skip", "btn-like", "btn-save"].forEach((id) => ($(id).disabled = !enabled));
+  $("btn-back").disabled = !deck || !deck.index;
 }
 
 function renderLoading() {
@@ -271,6 +272,29 @@ function decide(kind, card) {
   setTimeout(() => { busy = false; renderStack(); renderPips(); renderInterests(); }, 260);
 }
 
+// Bring the previous card back and undo how it was swiped.
+function goBack() {
+  if (busy || !deck || !deck.index) return;
+  deck.index--;
+  const story = deck.cards[deck.index];
+  const prev = deck.results[story.id];
+  delete deck.results[story.id];
+  record(story, "undo");
+  store(K.deck, deck);
+  renderStack();
+  renderPips();
+  renderInterests();
+  const top = $("stack").querySelector(".card:last-child");
+  if (top && prev) {
+    const dir = prev === "like" ? 1 : -1;
+    top.style.transition = "none";
+    top.style.transform = `translate(${dir * 120}vw, 40px) rotate(${dir * 24}deg)`;
+    top.getBoundingClientRect();
+    top.style.transition = "";
+    top.style.transform = "";
+  }
+}
+$("btn-back").onclick = goBack;
 $("btn-like").onclick = () => decide("like");
 $("btn-skip").onclick = () => decide("skip");
 $("btn-save").onclick = () => {
@@ -319,7 +343,10 @@ function openSheet(story) {
 }
 function closeSheet() { $("scrim").hidden = true; $("sheet").hidden = true; }
 $("scrim").onclick = closeSheet;
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeSheet();
+  if (e.key === "Backspace" && $("sheet").hidden && !$("view-today").hidden) goBack();
+});
 
 /* ---------- Saved ---------- */
 function renderSaved() {
@@ -345,8 +372,21 @@ function renderSaved() {
 }
 
 /* ---------- Interests (Phase 1: raw counts) ---------- */
+function finalDecisions() {
+  const last = new Map();
+  for (const e of log) {
+    if (e.kind === "like" || e.kind === "skip") last.set(e.id, e);
+    else if (e.kind === "undo") last.delete(e.id);
+  }
+  return [...last.values()];
+}
+
 function renderInterests() {
-  const count = (t, kind) => log.filter((e) => e.topic === t && e.kind === kind).length;
+  const decided = finalDecisions();
+  const count = (t, kind) =>
+    kind === "save"
+      ? saved.filter((s) => s.topic === t).length
+      : decided.filter((e) => e.topic === t && e.kind === kind).length;
   $("topics").innerHTML = TOPIC_KEYS.map((t) => {
     const tp = TOPICS[t], l = count(t, "like"), s = count(t, "skip"), sv = count(t, "save"), total = l + s || 1;
     return `<div class="trow" style="--c:${tp.c}">
@@ -357,12 +397,12 @@ function renderInterests() {
   }).join("");
 
   const bySource = {};
-  log.filter((e) => e.kind === "like" || e.kind === "save").forEach((e) => (bySource[e.source] = (bySource[e.source] || 0) + 1));
+  [...decided.filter((e) => e.kind === "like"), ...saved].forEach((e) => (bySource[e.source] = (bySource[e.source] || 0) + 1));
   const top = Object.entries(bySource).sort((a, b) => b[1] - a[1]).slice(0, 8);
   $("sources").innerHTML = top.length
     ? top.map(([n, v]) => `<span>${esc(n)}<b>${v}</b></span>`).join("")
     : `<span>None yet</span>`;
-  const decisions = log.filter((e) => e.kind === "like" || e.kind === "skip").length;
+  const decisions = decided.length;
   $("log-count").textContent = `${decisions} swipes recorded on this phone.`;
 }
 

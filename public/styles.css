@@ -139,7 +139,8 @@ main { min-height: 0; position: relative; }
 .btn { border: 1px solid var(--line); background: transparent; border-radius: 12px; padding: 10px 14px; font-weight: 600; text-decoration: none; display: inline-block; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
-.actions { display: flex; justify-content: center; align-items: center; gap: 22px; padding-block: 14px 8px; }
+.actions { display: flex; justify-content: center; align-items: center; gap: 18px; padding-block: 14px 8px; }
+.act.back-b { color: var(--muted); }
 .act {
   width: 58px; height: 58px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface);
   display: grid; place-items: center; box-shadow: var(--shadow);
