@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tenner</title>
+  <meta name="description" content="Ten news stories a day, as swipeable cards.">
+  <meta name="theme-color" content="#E9ECE8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0E1311" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Tenner">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" href="/icons/icon-192.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="wordmark">Tenner<span>.</span></div>
+      <div class="date" id="date"></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="view" id="view-today" aria-label="Today">
+      <div class="install" id="install" hidden>
+        <p>Add Tenner to your Home Screen: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>
+        <button id="install-close" aria-label="Dismiss">&times;</button>
+      </div>
+      <div class="counter-row">
+        <div class="serial" id="serial">&nbsp;</div>
+        <div class="pips" id="pips" aria-hidden="true"></div>
+      </div>
+      <div class="stack" id="stack"></div>
+      <div class="actions">
+        <button class="act skip-b" id="btn-skip" aria-label="Not for me">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+        <button class="act small save-b" id="btn-save" aria-label="Save for later" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3.5h12v17l-6-4.2-6 4.2z"/></svg>
+        </button>
+        <button class="act like-b" id="btn-like" aria-label="Interesting">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5 10-11"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <section class="view" id="view-saved" aria-label="Saved" hidden>
+      <div class="scroll">
+        <div>
+          <h2 class="h2">Saved</h2>
+          <p class="lede">Stories you bookmarked to read properly later.</p>
+        </div>
+        <div class="saved-list" id="saved-list"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-interests" aria-label="Interests" hidden>
+      <div class="scroll">
+        <div>
+          <h2 class="h2">Your swipes so far</h2>
+          <p class="lede">Tenner is recording every swipe, open and save. From Phase 3 it uses them to pick your ten. Until then, each day is split evenly across the four topics.</p>
+        </div>
+        <div>
+          <p class="section-label">By topic</p>
+          <div class="topics" id="topics"></div>
+        </div>
+        <div>
+          <p class="section-label">Top sources you liked</p>
+          <div class="kw" id="sources"></div>
+        </div>
+        <p class="note" id="log-count"></p>
+      </div>
+    </section>
+  </main>
+
+  <nav role="tablist">
+    <button role="tab" aria-selected="true" data-view="today">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="5" y="4" width="12" height="16" rx="2.5"/><path d="M19.5 7v11.5a2 2 0 0 1-2 2H9"/></svg>
+      Today <span class="n" id="tab-left">&nbsp;</span>
+    </button>
+    <button role="tab" aria-selected="false" data-view="saved">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M6 3.5h12v17l-6-4.2-6 4.2z"/></svg>
+      Saved <span class="n" id="tab-saved">0</span>
+    </button>
+    <button role="tab" aria-selected="false" data-view="interests">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      Interests <span class="n">&nbsp;</span>
+    </button>
+  </nav>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-h" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

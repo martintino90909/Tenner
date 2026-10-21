@@ -1,0 +1,10 @@
+{
+  "name": "tenner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Ten news stories a day as swipeable cards.",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

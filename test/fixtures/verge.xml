@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>The Verge</title>
+<entry><title type="html">Battery startup says its cell lasts 1,000 charges</title><link rel="alternate" type="text/html" href="https://www.theverge.com/2026/10/21/battery"/><published>2026-10-21T09:00:00-04:00</published><summary type="html">&lt;p&gt;Solid-state batteries are getting closer &#8212; maybe.&lt;/p&gt;</summary></entry>
+<entry><title type="html">Phones get AI chips</title><link rel="alternate" type="text/html" href="https://www.theverge.com/2026/10/21/chips"/><published>2026-10-21T06:00:00Z</published><content type="html">&lt;img src="https://cdn.vox.com/chip.jpg"&gt;&lt;p&gt;Budget phones now ship with NPUs.&lt;/p&gt;</content></entry>
+</feed>
