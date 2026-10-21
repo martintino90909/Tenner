@@ -15,29 +15,25 @@ Ten news stories a day, as swipeable cards on your phone. Swipe right for intere
 | Part | Where |
 | --- | --- |
 | Phone app (HTML, CSS, JS, no build step) | `public/` |
-| News API: fetches feeds, picks the ten | `functions/api/today.js` |
+| Worker entry (serves the app, routes `/api/today`) | `src/worker.js` |
+| News API: fetches feeds, picks the ten | `src/api.js` |
+| Cloudflare config | `wrangler.jsonc` |
 | Feed list | `lib/sources.js` |
 | RSS/Atom parser | `lib/rss.js` |
 | Dedupe and daily selection | `lib/pick.js` |
 | Tests | `test/` (run `npm test`) |
 
-Hosted on Cloudflare Pages (free tier). The API runs as a Pages Function.
+Hosted on Cloudflare Workers (free tier), with `public/` served as static assets.
 
-## Cloudflare setup (one time)
+## Deploying
 
-1. In the Cloudflare dashboard, go to **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
-2. Pick the `tenner` repository.
-3. Build settings:
-   - Framework preset: **None**
-   - Build command: *leave empty*
-   - Build output directory: `public`
-4. Click **Save and Deploy**. Cloudflare finds the `functions/` folder on its own.
+The `tenner` Worker in Cloudflare is connected to this repo. Every push to `main` builds and deploys it automatically with `npx wrangler deploy`.
 
-After that, every push to `main` redeploys automatically.
+Live at https://tenner.martintino90909.workers.dev
 
 ## Checking the feeds
 
-Open `https://<your-site>.pages.dev/api/today?debug=1` to see every feed, whether it loaded, and how many stories it gave. To add or drop a source, edit `lib/sources.js`.
+Open `https://tenner.martintino90909.workers.dev/api/today?debug=1` to see every feed, whether it loaded, and how many stories it gave. To add or drop a source, edit `lib/sources.js`.
 
 ## Putting it on your iPhone
 

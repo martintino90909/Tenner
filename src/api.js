@@ -1,9 +1,9 @@
 // GET /api/today          -> { date, deck: [10 stories], pool: [candidates] }
 // GET /api/today?debug=1  -> same, plus the status of every feed
 
-import { SOURCES } from "../../lib/sources.js";
-import { parseFeed } from "../../lib/rss.js";
-import { buildPool, pickDeck, londonDate } from "../../lib/pick.js";
+import { SOURCES } from "../lib/sources.js";
+import { parseFeed } from "../lib/rss.js";
+import { buildPool, pickDeck, londonDate } from "../lib/pick.js";
 
 const UA = "Tenner/0.1 (personal news reader)";
 

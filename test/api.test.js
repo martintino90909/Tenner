@@ -19,7 +19,7 @@ test("handler returns a deck and reports failing feeds in debug mode", async () 
     if (url.includes("bbci")) return new Response(fresh.replaceAll("abc123", "abc" + url.length));
     return new Response("nope", { status: 404 });
   };
-  const { onRequestGet } = await import("../functions/api/today.js");
+  const { onRequestGet } = await import("../src/api.js");
   const res = await onRequestGet({ request: new Request("https://tenner.test/api/today?debug=1"), waitUntil: () => {} });
   const body = await res.json();
 
