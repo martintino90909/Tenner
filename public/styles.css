@@ -121,6 +121,12 @@ main { min-height: 0; position: relative; }
 .meta { font-size: 12px; color: var(--muted); display: flex; gap: 6px; flex-wrap: wrap; }
 .headline { font-family: var(--f-display); font-weight: 700; font-size: 22px; line-height: 1.2; letter-spacing: -0.01em; text-wrap: balance; margin: 0; }
 .summary { color: var(--muted); margin: 0; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.why { border-left: 3px solid var(--accent); padding: 2px 0 2px 10px; display: flex; flex-direction: column; gap: 2px; }
+.why:empty { display: none; }
+.why-label { font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.why p { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink); }
+.why .why-loading .bar { display: block; height: 12px; width: 85%; margin-top: 4px; }
+.body:has(.why p) .summary { -webkit-line-clamp: 3; }
 .hint { margin-top: auto; font-size: 12px; color: var(--muted); }
 
 /* Loading and error cards */
@@ -206,7 +212,7 @@ nav button .n { font-family: var(--f-mono); font-size: 10px; }
 
 @media (max-height: 640px) {
   .headline { font-size: 19px; }
-  .summary { -webkit-line-clamp: 3; }
+  .summary, .body:has(.why p) .summary { -webkit-line-clamp: 2; }
   .act { width: 50px; height: 50px; }
   .act.small { width: 42px; height: 42px; }
 }

@@ -99,6 +99,50 @@ function dealMore() {
   renderAll();
 }
 
+/* ---------- AI "why it matters" ---------- */
+const whyPending = new Set();
+const whyFailed = new Set();
+
+function whyHTML(s) {
+  if (whyFailed.has(s.id) && !s.why) return "";
+  const body = s.why ? `<p>${esc(s.why)}</p>` : `<p class="why-loading"><span class="bar"></span></p>`;
+  return `<span class="why-label">Why it matters</span>${body}`;
+}
+
+function paintWhy(story) {
+  document.querySelectorAll(`.why[data-why="${story.id}"]`).forEach((el) => {
+    el.innerHTML = whyHTML(story);
+    el.hidden = !el.innerHTML;
+  });
+}
+
+async function ensureWhy(story) {
+  if (!story || story.why || whyPending.has(story.id) || whyFailed.has(story.id)) return;
+  whyPending.add(story.id);
+  try {
+    const res = await fetch("/api/why", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: story.title, summary: story.summary, source: story.source }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.why) throw new Error(data.error || `HTTP ${res.status}`);
+    // Keep it with the story everywhere it's stored, so it's only generated once.
+    for (const list of [deck?.cards, deck?.pool, saved]) {
+      list?.forEach((x) => { if (x.id === story.id) x.why = data.why; });
+    }
+    story.why = data.why;
+    store(K.deck, deck);
+    store(K.saved, saved);
+  } catch (err) {
+    whyFailed.add(story.id);
+    console.warn("Why it matters unavailable:", err.message);
+  } finally {
+    whyPending.delete(story.id);
+    paintWhy(story);
+  }
+}
+
 /* ---------- Today ---------- */
 function cardHTML(s, i) {
   const tp = TOPICS[s.topic] || TOPICS.world;
@@ -114,6 +158,7 @@ function cardHTML(s, i) {
       <div class="meta"><span>${esc(s.source)}</span>${s.published ? `<span>·</span><span>${ago(s.published)}</span>` : ""}</div>
       <h2 class="headline">${esc(s.title)}</h2>
       ${s.summary ? `<p class="summary">${esc(s.summary)}</p>` : ""}
+      <div class="why" data-why="${esc(s.id)}">${whyHTML(s)}</div>
       <div class="hint">Tap to open · swipe to sort</div>
     </div>`;
 }
@@ -213,6 +258,8 @@ function renderStack() {
     stack.appendChild(el);
   }
   shownAt = Date.now();
+  // Fetch "why it matters" for this card and the next two, so it's ready when they arrive.
+  deck.cards.slice(deck.index, deck.index + 3).forEach(ensureWhy);
   $("btn-save").setAttribute("aria-pressed", String(saved.some((x) => x.id === deck.cards[deck.index].id)));
 }
 
@@ -330,11 +377,13 @@ function openSheet(story) {
     <div class="meta"><span style="color:${tp.c};font-weight:600">${tp.name}</span><span>·</span><span>${esc(story.source)}</span>${story.published ? `<span>·</span><span>${ago(story.published)}</span>` : ""}</div>
     <h2 class="headline" id="sheet-h">${esc(story.title)}</h2>
     ${story.summary ? `<p>${esc(story.summary)}</p>` : ""}
+    <div class="why" data-why="${esc(story.id)}">${whyHTML(story)}</div>
     <div class="btn-row">
       <a class="btn primary" id="read-link" href="${esc(story.link)}" target="_blank" rel="noopener">Read on ${esc(story.source)}</a>
       <button class="btn" id="sheet-close">Back to cards</button>
     </div>`;
   $("sheet").querySelector("img")?.addEventListener("error", (e) => e.target.remove());
+  ensureWhy(story);
   $("scrim").hidden = false;
   $("sheet").hidden = false;
   $("read-link").onclick = () => record(story, "read");
