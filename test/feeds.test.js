@@ -74,3 +74,13 @@ test("helpers", () => {
   assert.equal(londonDate(new Date("2026-10-21T23:30:00Z")), "2026-10-22");
   assert.ok(truncate("word ".repeat(100), 50).length <= 51);
 });
+
+test("letters and opinion pieces are skipped", () => {
+  const base = { topic: "biz", source: "Guardian Business", summary: "", image: "", published: NOW };
+  const pool = buildPool([
+    { ...base, id: "a", title: "A plan to ensure energy is affordable for all | Letters", link: "https://www.theguardian.com/business/2026/oct/21/letters" },
+    { ...base, id: "b", title: "Why the budget gets it wrong", link: "https://www.theguardian.com/commentisfree/2026/oct/21/budget" },
+    { ...base, id: "c", title: "Energy firms cut prices for winter", link: "https://www.theguardian.com/business/2026/oct/21/energy" },
+  ], NOW);
+  assert.deepEqual(pool.map((p) => p.id), ["c"]);
+});
