@@ -37,3 +37,54 @@ test("only Tenner's news sites are allowed", () => {
   assert.ok(!isAllowed("file:///etc/passwd", ARTICLE_SITES));
   assert.ok(!isAllowed("not a url", ARTICLE_SITES));
 });
+
+test("drops related headlines, affiliate notes and author bios at the end", () => {
+  const p = (t) => `<p>${t}</p>`;
+  const body = [
+    "Mercedes driver George Russell said he was searching for answers after a difficult weekend in Austin, Texas.",
+    "He qualified sixth and finished fifth, well behind his team-mate, who took pole position and the race win.",
+    "The team said it would study the data from the weekend before the next round in Mexico City.",
+    "Russell added that the car had felt unpredictable on the bumpy surface throughout all three practice sessions.",
+    "Mercedes now leads the constructors' championship by 41 points with three rounds of the season remaining.",
+  ];
+  const tail = [
+    "When you purchase through links in our articles, we may earn a small commission.",
+    "Anthony Ha is TechCrunch’s weekend editor. Previously, he worked as a tech reporter at Adweek.",
+    "You can contact Anthony by emailing [email&#160;protected].",
+    "Norris frustrated after qualifying: \"I did a very bad job\"",
+    "Antonelli pole shows Mercedes is 'finally seeing the results' of car upgrades",
+  ];
+  const html = `<html><body><article>${body.map(p).join("")}${tail.map(p).join("")}<div>${"x".repeat(2000)}</div></article></body></html>`;
+  const a = extractArticle(html);
+  assert.equal(a.ok, true);
+  assert.deepEqual(a.blocks.map((b) => b.text), body);
+});
+
+test("falls back to the whole page when the <article> region is cut short", () => {
+  const paras = Array.from({ length: 8 }, (_, i) => `<div data-block="text"><p>Paragraph ${i + 1} of the story explains another part of what happened in some detail.</p></div>`).join("");
+  const html = `<html><body><article><div>${"<span>x</span>".repeat(300)}</div><article><a href="/x">Card</a></article></article><main>${paras}</main></body></html>`;
+  const a = extractArticle(html);
+  assert.equal(a.ok, true);
+  assert.equal(a.blocks.length, 8);
+});
+
+test("uses JSON-LD articleBody when the page markup has no readable paragraphs", () => {
+  const text = Array.from({ length: 12 }, (_, i) => `Sentence number ${i + 1} describes the story in a full sentence.`).join(" ");
+  const html = `<html><head><script type="application/ld+json">${JSON.stringify({ "@graph": [{ "@type": "NewsArticle", articleBody: text }] })}</script></head><body><div id="app"></div></body></html>`;
+  const a = extractArticle(html);
+  assert.equal(a.ok, true);
+  assert.equal(a.blocks.length, 4, "grouped into paragraphs of three sentences");
+});
+
+test("stays fast on a large page", () => {
+  const filler = `<div class="x"><span>nav</span><a href="/y">link</a></div>`.repeat(6000);
+  const story = Array.from({ length: 30 }, () => `<p>${"A sentence of body text that goes on for a while. ".repeat(3)}</p>`).join("");
+  const html = `<html><body>${filler}<article>${story}</article>${filler}</body></html>`;
+  extractArticle(html);
+  const t0 = performance.now();
+  for (let i = 0; i < 5; i++) extractArticle(html);
+  const ms = (performance.now() - t0) / 5;
+  assert.ok(html.length > 500_000);
+  assert.ok(ms < 25, `took ${ms.toFixed(1)}ms`);
+  console.log(`# ${Math.round(html.length / 1000)}KB page: ${ms.toFixed(1)}ms`);
+});
