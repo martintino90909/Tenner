@@ -88,3 +88,10 @@ test("stays fast on a large page", () => {
   assert.ok(ms < 25, `took ${ms.toFixed(1)}ms`);
   console.log(`# ${Math.round(html.length / 1000)}KB page: ${ms.toFixed(1)}ms`);
 });
+
+test("drops site promos and single-name author bios at the end", () => {
+  const body = Array.from({ length: 6 }, (_, i) => `<p>Paragraph ${i + 1} describes the new car and how it drives on British roads in detail.</p>`).join("");
+  const tail = `<p>Did you know you can sell your car through Auto Express? We’ll help you get a great price.</p><p>Phil is Auto Express’ editor-at-large: he keeps close to car companies, finding stories.</p>`;
+  const a = extractArticle(`<html><body><article>${body}${tail}<div>${"x".repeat(2000)}</div></article></body></html>`);
+  assert.equal(a.blocks.length, 6);
+});
