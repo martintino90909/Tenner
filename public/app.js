@@ -367,30 +367,114 @@ function toggleSave(story) {
   renderInterests();
 }
 
-/* ---------- article sheet ---------- */
+/* ---------- reader ---------- */
+const articleCache = new Map();
+let reading = null; // { story, openedAt, depth }
+
+const BOOKMARK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3.5h12v17l-6-4.2-6 4.2z"/></svg>`;
+const CLOSE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+
+const norm = (t = "") => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+function articleHTML(a) {
+  let html = "";
+  let list = false;
+  for (const b of a.blocks) {
+    if (b.type === "li" && !list) { html += "<ul>"; list = true; }
+    if (b.type !== "li" && list) { html += "</ul>"; list = false; }
+    if (b.type === "h") html += `<h3>${esc(b.text)}</h3>`;
+    else if (b.type === "q") html += `<blockquote>${esc(b.text)}</blockquote>`;
+    else if (b.type === "li") html += `<li>${esc(b.text)}</li>`;
+    else html += `<p>${esc(b.text)}</p>`;
+  }
+  return html + (list ? "</ul>" : "");
+}
+
+async function loadArticle(story) {
+  const box = $("article");
+  const done = (html) => {
+    if (reading?.story.id !== story.id) return;
+    box.innerHTML = html;
+    box.removeAttribute("aria-busy");
+  };
+  try {
+    let a = articleCache.get(story.link);
+    if (!a) {
+      const res = await fetch(`/api/article?url=${encodeURIComponent(story.link)}`);
+      a = await res.json().catch(() => ({ ok: false, reason: `Server returned ${res.status}` }));
+      if (a.ok) articleCache.set(story.link, a);
+    }
+    if (reading?.story.id !== story.id) return;
+    if (!a.ok) throw new Error(a.reason || "The full story couldn't be loaded");
+    // The outlet's intro usually repeats the first paragraph, so drop it when it does.
+    const lede = $("reader-lede");
+    if (lede && a.blocks[0] && norm(a.blocks[0].text).startsWith(norm(story.summary).slice(0, 40))) lede.remove();
+    $("reader-time").textContent = `${a.minutes} min read`;
+    done(articleHTML(a));
+    record(story, "read", { words: a.words });
+  } catch (err) {
+    done(`<div class="reader-fail"><p><b>Couldn't show the full story here.</b> ${esc(err.message)}.</p>
+      <a class="btn primary" href="${esc(story.link)}" target="_blank" rel="noopener">Read on ${esc(story.source)}</a></div>`);
+  }
+}
+
+function setReaderSave() {
+  const b = $("reader-save");
+  if (b && reading) b.setAttribute("aria-pressed", String(saved.some((x) => x.id === reading.story.id)));
+}
+
 function openSheet(story) {
   const tp = TOPICS[story.topic] || TOPICS.world;
   record(story, "open");
-  $("sheet").innerHTML = `
-    <div class="grab"></div>
-    ${story.image ? `<img src="${esc(story.image)}" alt="" referrerpolicy="no-referrer">` : ""}
-    <div class="meta"><span style="color:${tp.c};font-weight:600">${tp.name}</span><span>·</span><span>${esc(story.source)}</span>${story.published ? `<span>·</span><span>${ago(story.published)}</span>` : ""}</div>
-    <h2 class="headline" id="sheet-h">${esc(story.title)}</h2>
-    ${story.summary ? `<p>${esc(story.summary)}</p>` : ""}
-    <div class="why" data-why="${esc(story.id)}">${whyHTML(story)}</div>
-    <div class="btn-row">
-      <a class="btn primary" id="read-link" href="${esc(story.link)}" target="_blank" rel="noopener">Read on ${esc(story.source)}</a>
-      <button class="btn" id="sheet-close">Back to cards</button>
+  reading = { story, openedAt: Date.now(), depth: 0 };
+  const sheet = $("sheet");
+  sheet.className = "sheet reader";
+  sheet.innerHTML = `
+    <div class="reader-bar">
+      <button class="icon-btn" id="reader-close" aria-label="Back to cards">${CLOSE}</button>
+      <div class="reader-src"><span style="color:${tp.c}">${esc(tp.short)}</span> · ${esc(story.source)} · <span id="reader-time">${story.published ? ago(story.published) : ""}</span></div>
+      <button class="icon-btn save-toggle" id="reader-save" aria-label="Save for later" aria-pressed="false">${BOOKMARK}</button>
+    </div>
+    <div class="reader-scroll" id="reader-scroll">
+      <div class="reader-inner">
+        ${story.image ? `<img class="reader-img" src="${esc(story.image)}" alt="" referrerpolicy="no-referrer">` : ""}
+        <h2 class="reader-title" id="sheet-h">${esc(story.title)}</h2>
+        ${story.summary ? `<p class="reader-lede" id="reader-lede">${esc(story.summary)}</p>` : ""}
+        <div class="why" data-why="${esc(story.id)}">${whyHTML(story)}</div>
+        <div class="article" id="article" aria-busy="true">
+          <div class="bar" style="width:96%"></div><div class="bar" style="width:90%"></div><div class="bar" style="width:93%"></div><div class="bar" style="width:60%"></div>
+          <div class="bar" style="width:94%;margin-top:14px"></div><div class="bar" style="width:88%"></div><div class="bar" style="width:72%"></div>
+        </div>
+        <div class="reader-foot">
+          <a class="btn" href="${esc(story.link)}" target="_blank" rel="noopener" id="reader-orig">Open on ${esc(story.source)}</a>
+        </div>
+      </div>
     </div>`;
-  $("sheet").querySelector("img")?.addEventListener("error", (e) => e.target.remove());
-  ensureWhy(story);
+  sheet.querySelector(".reader-img")?.addEventListener("error", (e) => e.target.remove());
   $("scrim").hidden = false;
-  $("sheet").hidden = false;
-  $("read-link").onclick = () => record(story, "read");
-  $("sheet-close").onclick = closeSheet;
-  $("read-link").focus();
+  sheet.hidden = false;
+  $("reader-close").onclick = closeSheet;
+  $("reader-save").onclick = () => { toggleSave(story); setReaderSave(); if (deck) renderStack(); };
+  $("reader-orig").onclick = () => record(story, "original");
+  const scroller = $("reader-scroll");
+  scroller.addEventListener("scroll", () => {
+    const max = scroller.scrollHeight - scroller.clientHeight;
+    if (max > 0 && reading) reading.depth = Math.max(reading.depth, Math.min(1, scroller.scrollTop / max));
+  }, { passive: true });
+  setReaderSave();
+  ensureWhy(story);
+  loadArticle(story);
+  $("reader-close").focus();
 }
-function closeSheet() { $("scrim").hidden = true; $("sheet").hidden = true; }
+
+function closeSheet() {
+  if (reading) {
+    record(reading.story, "close", { ms: Date.now() - reading.openedAt, depth: Math.round(reading.depth * 100) / 100 });
+    reading = null;
+  }
+  $("scrim").hidden = true;
+  $("sheet").hidden = true;
+}
 $("scrim").onclick = closeSheet;
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeSheet();
@@ -409,10 +493,14 @@ function renderSaved() {
     .map((s) => {
       const tp = TOPICS[s.topic] || TOPICS.world;
       return `<div class="saved-item" style="--c:${tp.c}"><span class="stripe"></span>
-        <a href="${esc(s.link)}" target="_blank" rel="noopener"><h3>${esc(s.title)}</h3><small>${tp.short} · ${esc(s.source)}</small></a>
+        <button class="saved-open" data-open="${esc(s.id)}"><h3>${esc(s.title)}</h3><small>${tp.short} · ${esc(s.source)}</small></button>
         <button data-id="${esc(s.id)}" aria-label="Remove from saved">Remove</button></div>`;
     })
     .join("");
+  list.querySelectorAll("button[data-open]").forEach((b) => (b.onclick = () => {
+    const s = saved.find((x) => x.id === b.dataset.open);
+    if (s) openSheet(s);
+  }));
   list.querySelectorAll("button[data-id]").forEach((b) => (b.onclick = () => {
     const s = saved.find((x) => x.id === b.dataset.id);
     if (s) toggleSave(s);
