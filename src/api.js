@@ -47,6 +47,7 @@ export async function onRequestGet({ request, waitUntil }) {
       ok: results[i].status === "fulfilled",
       stories: results[i].status === "fulfilled" ? results[i].value.length : 0,
       error: results[i].status === "rejected" ? String(results[i].reason?.message || results[i].reason) : undefined,
+      latest: results[i].status === "fulfilled" ? results[i].value.slice(0, 3).map((it) => ({ title: it.title, link: it.link })) : [],
     }));
   }
 
