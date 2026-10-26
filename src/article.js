@@ -19,12 +19,14 @@ const json = (body, status = 200, maxAge = 0) =>
   });
 
 export async function handleArticle(request, ctx) {
-  const url = new URL(request.url).searchParams.get("url") || "";
+  const params = new URL(request.url).searchParams;
+  const url = params.get("url") || "";
+  const debug = params.has("debug");
   if (!isAllowed(url, ARTICLE_SITES)) return json({ ok: false, reason: "This site isn't supported in the reader" }, 400);
 
   const cache = typeof caches !== "undefined" ? caches.default : null;
   const key = new Request(`https://tenner.cache/article?u=${encodeURIComponent(url)}`);
-  if (cache) {
+  if (cache && !debug) {
     const hit = await cache.match(key);
     if (hit) return hit;
   }
@@ -42,7 +44,8 @@ export async function handleArticle(request, ctx) {
   if (!res.ok) return json({ ok: false, reason: `The site returned an error (${res.status})` }, 502);
   if (!isAllowed(res.url || url, ARTICLE_SITES)) return json({ ok: false, reason: "The story redirected to another site" }, 502);
 
-  const article = extractArticle(await res.text());
+  const article = extractArticle(await res.text(), { debug });
+  if (debug) return json(article);
   const body = article.ok
     ? article
     : { ok: false, reason: "This story is paywalled or in a format the reader can't show" };
