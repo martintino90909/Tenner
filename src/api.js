@@ -1,9 +1,9 @@
-// GET /api/today          -> { date, deck: [10 stories], pool: [candidates] }
+// GET /api/today          -> { date, topics, deck: [10 stories], pool: [candidates] }
 // GET /api/today?debug=1  -> same, plus the status of every feed
 
 import { SOURCES } from "../lib/sources.js";
 import { parseFeed } from "../lib/rss.js";
-import { buildPool, pickDeck, londonDate } from "../lib/pick.js";
+import { buildPool, pickDeck, londonDate, TOPIC_KEYS } from "../lib/pick.js";
 
 const UA = "Tenner/0.1 (personal news reader)";
 
@@ -19,27 +19,37 @@ async function fetchSource(src) {
   return items;
 }
 
-export async function onRequestGet({ request, waitUntil }) {
+// The shared pool of today's stories is cached for 30 minutes; each person's
+// ten is then picked from it using their own topics.
+async function loadPool(origin, now, date, debug, waitUntil) {
+  const halfHour = Math.floor(now.getTime() / (30 * 60 * 1000));
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  const cacheKey = new Request(`${origin}/__pool2?d=${date}&b=${halfHour}`);
+  if (cache && !debug) {
+    const hit = await cache.match(cacheKey);
+    if (hit) return { pool: (await hit.json()).pool };
+  }
+  const results = await Promise.allSettled(SOURCES.map(fetchSource));
+  const items = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+  const pool = buildPool(items, now.getTime());
+  if (cache && !debug && pool.length) {
+    waitUntil(cache.put(cacheKey, new Response(JSON.stringify({ pool }), { headers: { "cache-control": "public, max-age=1800" } })));
+  }
+  return { pool, results };
+}
+
+export async function onRequestGet({ request, waitUntil, topics = TOPIC_KEYS }) {
   const url = new URL(request.url);
   const debug = url.searchParams.has("debug");
   const now = new Date();
   const date = londonDate(now);
-  const halfHour = Math.floor(now.getTime() / (30 * 60 * 1000));
 
-  const cache = typeof caches !== "undefined" ? caches.default : null;
-  const cacheKey = new Request(`${url.origin}/__pool?d=${date}&b=${halfHour}`);
-  if (cache && !debug) {
-    const hit = await cache.match(cacheKey);
-    if (hit) return hit;
-  }
+  const { pool: all, results } = await loadPool(url.origin, now, date, debug, waitUntil);
+  const pool = all.filter((s) => topics.includes(s.topic));
+  const deck = pickDeck(pool, date, new Set(), 10, topics);
 
-  const results = await Promise.allSettled(SOURCES.map(fetchSource));
-  const items = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
-  const pool = buildPool(items, now.getTime());
-  const deck = pickDeck(pool, date);
-
-  const body = { date, generatedAt: now.toISOString(), deck, pool };
-  if (debug) {
+  const body = { date, generatedAt: now.toISOString(), topics, deck, pool };
+  if (debug && results) {
     body.feeds = SOURCES.map((s, i) => ({
       name: s.name,
       topic: s.topic,
@@ -51,12 +61,7 @@ export async function onRequestGet({ request, waitUntil }) {
     }));
   }
 
-  const res = new Response(JSON.stringify(body), {
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": debug ? "no-store" : "public, max-age=1800",
-    },
+  return new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" },
   });
-  if (cache && !debug && deck.length) waitUntil(cache.put(cacheKey, res.clone()));
-  return res;
 }

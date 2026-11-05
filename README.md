@@ -19,7 +19,9 @@ Ten news stories a day, as swipeable cards on your phone. Swipe right for intere
 | Worker entry (serves the app, routes `/api/today`) | `src/worker.js` |
 | News API: fetches feeds, picks the ten | `src/api.js` |
 | Reader API: loads an article's full text (`/api/article`) | `src/article.js`, `lib/article.js` |
-| AI "why it matters" (`/api/why`) | `src/why.js` |
+| AI "why it matters" (`/api/why`), shared cache | `src/why.js` |
+| Accounts (Durable Object with SQLite) | `src/store-do.js`, `lib/store.js` |
+| Admin page | `public/admin.html` |
 | Cloudflare config | `wrangler.jsonc` |
 | Feed list | `lib/sources.js` |
 | RSS/Atom parser | `lib/rss.js` |
@@ -33,6 +35,12 @@ Hosted on Cloudflare Workers (free tier), with `public/` served as static assets
 The `tenner` Worker in Cloudflare is connected to this repo. Every push to `main` builds and deploys it automatically with `npx wrangler deploy`.
 
 Live at https://tenner.martintino90909.workers.dev
+
+## Accounts
+
+Tenner is invite-only. Each person gets a personal link (`/u/<key>`); opening it signs them in on that phone, and adding it to the Home Screen keeps them signed in. Saved stories and swipes stay on each person's phone; the server only keeps their name, topics, status and usage counts.
+
+Manage people at `/admin`: add someone (pick their topics), copy their invite message, pause or resume them, make a new link (the old one stops working), or remove them. The admin key is not in this repo; only its SHA-256 hash is (`ADMIN_KEY_SHA256` in `wrangler.jsonc`). To change the key, put the hash of a new random key there and redeploy.
 
 ## Checking the feeds
 

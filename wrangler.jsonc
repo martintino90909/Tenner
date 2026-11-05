@@ -8,5 +8,13 @@
     "binding": "ASSETS"
   },
   "ai": { "binding": "AI" },
+  "durable_objects": {
+    "bindings": [{ "name": "STORE", "class_name": "TennerStore" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TennerStore"] }],
+  "vars": {
+    // SHA-256 of Martin's admin key. The key itself is never stored in the repo.
+    "ADMIN_KEY_SHA256": "504f23198e8d8ac7acf13106b98b6eb1220bf23ab8284f63cf9743757bae0678"
+  },
   "observability": { "enabled": true }
 }

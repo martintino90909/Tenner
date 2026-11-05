@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>Tenner Admin</title>
+  <link rel="icon" href="/icons/icon-192.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    body { overflow: auto; }
+    .admin {
+      max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px;
+      padding: calc(20px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(40px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+    }
+    .admin header { padding: 0; align-items: baseline; }
+    .tag { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; }
+    .panel { background: var(--surface); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .panel h2 { font-family: var(--f-display); font-size: 20px; font-weight: 800; margin: 0; letter-spacing: -0.01em; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label, .legend { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+    input[type="text"], input[type="password"] {
+      font: inherit; font-size: 16px; padding: 11px 13px; border-radius: 12px; border: 1px solid var(--line);
+      background: var(--bg); color: var(--ink); width: 100%;
+    }
+    input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip-toggle {
+      border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 6px 12px;
+      font-size: 13px; font-weight: 600; color: var(--muted); display: inline-flex; align-items: center; gap: 6px;
+    }
+    .chip-toggle i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); opacity: .35; }
+    .chip-toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); }
+    .chip-toggle[aria-pressed="true"] i { opacity: 1; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .btn.small { padding: 7px 11px; font-size: 13px; border-radius: 10px; }
+    .btn.danger { color: var(--skip); }
+    .btn.danger.armed { background: var(--skip); color: var(--surface); border-color: var(--skip); }
+    .people { display: flex; flex-direction: column; gap: 12px; }
+    .person { background: var(--surface); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .person.paused { opacity: .75; }
+    .p-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+    .p-name { font-family: var(--f-display); font-size: 19px; font-weight: 700; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+    .pill { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+    .pill.active { color: var(--like); background: color-mix(in srgb, var(--like) 14%, transparent); }
+    .pill.paused { color: var(--skip); background: color-mix(in srgb, var(--skip) 14%, transparent); }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .stats div { border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; min-width: 0; }
+    .stats b { display: block; font-family: var(--f-mono); font-weight: 500; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stats span { font-size: 11px; color: var(--muted); }
+    .link-box { font-family: var(--f-mono); font-size: 12px; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 8px 10px; overflow-wrap: anywhere; user-select: all; }
+    .msg { margin: 0; font-size: 14px; color: var(--muted); }
+    .msg.error { color: var(--skip); }
+    .empty { margin: 0; }
+    @media (max-width: 420px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+<div class="admin">
+  <header>
+    <div class="brand">
+      <div class="wordmark">Tenner<span>.</span></div>
+      <span class="tag">Admin</span>
+    </div>
+  </header>
+
+  <section class="panel" id="login" hidden>
+    <h2>Sign in as admin</h2>
+    <p class="msg">Paste the admin key Claude gave you. It's remembered on this device.</p>
+    <form id="login-form" class="field" novalidate>
+      <label for="admin-key">Admin key</label>
+      <input id="admin-key" type="password" autocomplete="off" spellcheck="false">
+      <p class="msg error" id="login-error" hidden></p>
+      <div class="row"><button class="btn primary" type="submit">Sign in</button></div>
+    </form>
+  </section>
+
+  <div id="main" hidden>
+    <section class="panel">
+      <h2>Add a person</h2>
+      <form id="add-form" class="field" novalidate>
+        <label for="add-name">Name</label>
+        <input id="add-name" type="text" maxlength="40" autocomplete="off" placeholder="e.g. Alex">
+        <span class="legend">Topics</span>
+        <div class="chips" id="add-topics"></div>
+        <p class="msg error" id="add-error" hidden></p>
+        <div class="row"><button class="btn primary" type="submit">Create invite link</button></div>
+      </form>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:12px;margin-top:22px">
+      <div class="row" style="justify-content:space-between">
+        <h2 class="h2" style="font-size:22px">People</h2>
+        <button class="btn small" id="refresh">Refresh</button>
+      </div>
+      <div class="people" id="people"></div>
+      <p class="msg" id="sign-out-row"><button class="btn small" id="sign-out">Sign out of admin</button></p>
+    </section>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module">
+const TOPICS = {
+  tech: { name: "Tech & engineering", c: "var(--t-tech)" },
+  biz: { name: "Business & markets", c: "var(--t-biz)" },
+  cars: { name: "Cars & motorsport", c: "var(--t-cars)" },
+  world: { name: "UK & world", c: "var(--t-world)" },
+};
+const KEYS = Object.keys(TOPICS);
+const STORE_KEY = "tenner.adminKey";
+const $ = (id) => document.getElementById(id);
+const esc = (s = "") => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+const load = () => { try { return localStorage.getItem(STORE_KEY); } catch { return null; } };
+const save = (v) => { try { v ? localStorage.setItem(STORE_KEY, v) : localStorage.removeItem(STORE_KEY); } catch {} };
+
+// The admin link is /admin#<key>: take the key from the address, then hide it.
+let adminKey = load();
+if (location.hash.length > 8) {
+  adminKey = decodeURIComponent(location.hash.slice(1));
+  save(adminKey);
+  history.replaceState(null, "", location.pathname);
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2000);
+}
+
+async function call(path, method = "GET", body) {
+  const res = await fetch(path, {
+    method,
+    headers: { "x-tenner-admin": adminKey || "", ...(body ? { "content-type": "application/json" } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && data.error === "not-admin") { showLogin("That admin key isn't right."); throw new Error(data.message); }
+  if (!res.ok) throw new Error(data.message || `Server returned ${res.status}`);
+  return data;
+}
+
+const inviteLink = (u) => `${location.origin}/u/${u.token}`;
+const inviteMessage = (u) =>
+  `Hey ${u.name}, here's your invite to Tenner, my daily news app: ${inviteLink(u)}\n\nOpen it in Safari on your iPhone, then tap Share → Add to Home Screen.`;
+
+async function copy(text, done) {
+  try { await navigator.clipboard.writeText(text); toast(done); }
+  catch { prompt("Copy this:", text); }
+}
+
+function ago(ts) {
+  if (!ts) return "Never";
+  const m = Math.round((Date.now() - ts) / 60000);
+  if (m < 2) return "Just now";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  return d < 14 ? `${d}d ago` : new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function chipsHTML(selected, dataAttr) {
+  return KEYS.map((k) => `<button type="button" class="chip-toggle" style="--c:${TOPICS[k].c}" data-${dataAttr}="${k}" aria-pressed="${selected.includes(k)}"><i></i>${TOPICS[k].name}</button>`).join("");
+}
+
+/* ---------- add ---------- */
+$("add-topics").innerHTML = chipsHTML(KEYS, "topic");
+$("add-topics").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-topic]"); if (!b) return;
+  const on = b.getAttribute("aria-pressed") === "true";
+  const count = $("add-topics").querySelectorAll('[aria-pressed="true"]').length;
+  if (on && count === 1) return toast("Keep at least one topic");
+  b.setAttribute("aria-pressed", String(!on));
+});
+$("add-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("add-name").value.trim();
+  const err = $("add-error");
+  if (!name) { err.textContent = "Type the person's name first."; err.hidden = false; $("add-name").focus(); return; }
+  err.hidden = true;
+  const topics = [...$("add-topics").querySelectorAll('[aria-pressed="true"]')].map((b) => b.dataset.topic);
+  try {
+    const { user } = await call("/api/admin/users", "POST", { name, topics });
+    $("add-name").value = "";
+    $("add-topics").innerHTML = chipsHTML(KEYS, "topic");
+    await refresh(user.id);
+    toast(`Invite link ready for ${user.name}`);
+  } catch (e2) { err.textContent = e2.message; err.hidden = false; }
+});
+
+/* ---------- people ---------- */
+let people = [];
+let justAdded = null;
+
+function personHTML(u) {
+  const paused = u.status === "paused";
+  return `<article class="person${paused ? " paused" : ""}" data-id="${esc(u.id)}">
+    <div class="p-head">
+      <h3 class="p-name">${esc(u.name)}</h3>
+      <span class="pill ${paused ? "paused" : "active"}">${paused ? "Paused" : "Active"}</span>
+    </div>
+    <div class="stats">
+      <div><b>${ago(u.lastSeen)}</b><span>last used</span></div>
+      <div><b>${u.swipes}</b><span>swipes</span></div>
+      <div><b>${u.opens}</b><span>opened</span></div>
+      <div><b>${u.reads}</b><span>read in full</span></div>
+    </div>
+    <div class="chips" data-topics>${chipsHTML(u.topics, "t")}</div>
+    ${justAdded === u.id ? `<div class="link-box">${esc(inviteLink(u))}</div>` : ""}
+    <div class="row">
+      <button class="btn small primary" data-act="message">Copy invite message</button>
+      <button class="btn small" data-act="link">Copy link</button>
+      <button class="btn small" data-act="${paused ? "resume" : "pause"}">${paused ? "Resume" : "Pause"}</button>
+      <button class="btn small" data-act="reset">New link</button>
+      <button class="btn small danger" data-act="remove">Remove</button>
+    </div>
+  </article>`;
+}
+
+function render() {
+  $("people").innerHTML = people.length
+    ? people.map(personHTML).join("")
+    : `<div class="panel"><p class="msg empty">No one yet. Add yourself first, then your friends.</p></div>`;
+}
+
+async function refresh(highlight) {
+  if (highlight) justAdded = highlight;
+  const { users } = await call("/api/admin/users");
+  people = users;
+  render();
+}
+
+const armed = new Set();
+$("people").addEventListener("click", async (e) => {
+  const card = e.target.closest(".person"); if (!card) return;
+  const u = people.find((p) => p.id === card.dataset.id); if (!u) return;
+
+  const chip = e.target.closest("button[data-t]");
+  if (chip) {
+    const on = chip.getAttribute("aria-pressed") === "true";
+    const topics = on ? u.topics.filter((t) => t !== chip.dataset.t) : [...u.topics, chip.dataset.t];
+    if (!topics.length) return toast("Keep at least one topic");
+    try { await call(`/api/admin/users/${u.id}`, "PATCH", { topics }); await refresh(); toast(`Topics updated for ${u.name}`); }
+    catch (err) { toast(err.message); }
+    return;
+  }
+
+  const btn = e.target.closest("button[data-act]"); if (!btn) return;
+  const act = btn.dataset.act;
+  try {
+    if (act === "message") return copy(inviteMessage(u), "Invite message copied");
+    if (act === "link") return copy(inviteLink(u), "Link copied");
+    if (act === "pause" || act === "resume") {
+      await call(`/api/admin/users/${u.id}`, "PATCH", { status: act === "pause" ? "paused" : "active" });
+      await refresh();
+      return toast(act === "pause" ? `${u.name} is paused` : `${u.name} can use Tenner again`);
+    }
+    // Destructive actions need a second tap.
+    if (!armed.has(btn)) {
+      armed.add(btn);
+      const label = btn.textContent;
+      btn.textContent = act === "remove" ? "Tap again to remove" : "Tap again: old link stops working";
+      btn.classList.add("armed");
+      setTimeout(() => { armed.delete(btn); btn.textContent = label; btn.classList.remove("armed"); }, 3500);
+      return;
+    }
+    armed.delete(btn);
+    if (act === "reset") {
+      const { user } = await call(`/api/admin/users/${u.id}/reset`, "POST");
+      await refresh(user.id);
+      return toast(`New link made. Send it to ${u.name}.`);
+    }
+    if (act === "remove") {
+      await call(`/api/admin/users/${u.id}`, "DELETE");
+      await refresh();
+      return toast(`${u.name} removed`);
+    }
+  } catch (err) { toast(err.message); }
+});
+
+$("refresh").onclick = () => refresh().then(() => toast("Up to date")).catch((e) => toast(e.message));
+$("sign-out").onclick = () => { save(null); adminKey = null; showLogin(); };
+
+/* ---------- sign in ---------- */
+function showLogin(error) {
+  $("main").hidden = true;
+  $("login").hidden = false;
+  $("login-error").hidden = !error;
+  if (error) $("login-error").textContent = error;
+}
+$("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  adminKey = $("admin-key").value.trim();
+  save(adminKey);
+  boot();
+});
+
+async function boot() {
+  if (!adminKey) return showLogin();
+  try {
+    await refresh();
+    $("login").hidden = true;
+    $("main").hidden = false;
+  } catch (err) {
+    if ($("login").hidden) showLogin(err.message);
+  }
+}
+boot();
+</script>
+</body>
+</html>

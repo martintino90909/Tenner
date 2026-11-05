@@ -263,3 +263,22 @@ nav button .n { font-family: var(--f-mono); font-size: 10px; }
 .reader-foot { padding-top: 10px; border-top: 1px solid var(--line); }
 
 .saved-open { border: 0; background: none; padding: 0; text-align: left; min-width: 0; }
+
+/* ---------- Invite-only gate ---------- */
+.gate {
+  position: fixed; inset: 0; z-index: 40; background: var(--bg); overflow-y: auto;
+  padding: calc(48px + env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px));
+}
+.gate-inner { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.gate .wordmark { font-size: 40px; margin-bottom: 18px; }
+.gate-title { font-family: var(--f-display); font-weight: 800; font-size: 30px; line-height: 1.1; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+.gate-msg { margin: 0; color: var(--muted); font-size: 16px; }
+.gate-form { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.gate-form label { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.gate-form input {
+  font: inherit; font-size: 16px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); width: 100%;
+}
+.gate-form input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.gate-form .btn { align-self: flex-start; margin-top: 6px; }
+.gate-error { margin: 0; color: var(--skip); font-size: 14px; }

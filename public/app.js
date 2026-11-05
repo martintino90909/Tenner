@@ -9,7 +9,8 @@ const TOPICS = {
   world: { name: "UK & world", short: "UK & world", c: "var(--t-world)" },
 };
 const TOPIC_KEYS = Object.keys(TOPICS);
-const K = { deck: "tenner.deck", saved: "tenner.saved", log: "tenner.log", install: "tenner.installDismissed" };
+const myTopics = () => (me?.topics?.length ? me.topics.filter((t) => TOPICS[t]) : deck?.topics?.length ? deck.topics : TOPIC_KEYS);
+const K = { deck: "tenner.deck", saved: "tenner.saved", log: "tenner.log", install: "tenner.installDismissed", key: "tenner.key", pending: "tenner.pendingActivity" };
 const LOG_LIMIT = 2000;
 
 /* ---------- storage ---------- */
@@ -22,10 +23,59 @@ let deck = load(K.deck, null);
 let saved = load(K.saved, []);
 let log = load(K.log, []);
 
+/* ---------- sign-in (personal invite links) ---------- */
+// An invite link looks like /u/<key>. The key is remembered on this phone and
+// sent with every request. The manifest link carries it too, so an app added
+// to the Home Screen opens already signed in.
+const KEY_RE = /^[\w-]{8,64}$/;
+const fromPath = location.pathname.match(/^\/u\/([\w-]{8,64})\/?$/);
+if (fromPath) store(K.key, fromPath[1]);
+let key = load(K.key, null);
+if (key && !KEY_RE.test(key)) key = null;
+if (key) document.querySelector('link[rel="manifest"]')?.setAttribute("href", `/u/${key}/manifest.webmanifest`);
+let me = null; // { name, topics } once the server confirms the link
+
+class SignInError extends Error {
+  constructor(kind, message) { super(message); this.kind = kind; }
+}
+
+async function api(path, opts = {}) {
+  if (!key) throw new SignInError("signed-out", "Open your invite link to start using Tenner.");
+  const res = await fetch(path, { cache: "no-store", ...opts, headers: { ...(opts.headers || {}), "x-tenner-key": key } });
+  if (res.status === 401 || res.status === 403) {
+    const data = await res.json().catch(() => ({}));
+    if (data.error === "signed-out" || data.error === "paused") {
+      const err = new SignInError(data.error, data.message);
+      showGate(err);
+      throw err;
+    }
+  }
+  return res;
+}
+
+// Usage counts (numbers only) so Martin can see who's using Tenner.
+// Saved stories and swipes themselves never leave the phone.
+let pending = load(K.pending, { swipes: 0, opens: 0, reads: 0 });
+function flushActivity() {
+  if (!key || !(pending.swipes || pending.opens || pending.reads)) return;
+  const body = JSON.stringify({ key, ...pending });
+  const sent = navigator.sendBeacon?.("/api/activity", new Blob([body], { type: "application/json" }));
+  if (!sent) fetch("/api/activity", { method: "POST", body, headers: { "content-type": "application/json" }, keepalive: true }).catch(() => {});
+  pending = { swipes: 0, opens: 0, reads: 0 };
+  store(K.pending, pending);
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushActivity(); });
+
 function record(story, kind, extra = {}) {
   log.push({ id: story.id, topic: story.topic, source: story.source, kind, t: Date.now(), ...extra });
   if (log.length > LOG_LIMIT) log = log.slice(-LOG_LIMIT);
   store(K.log, log);
+  const counter = { like: "swipes", skip: "swipes", open: "opens", read: "reads" }[kind];
+  if (counter) {
+    pending[counter]++;
+    store(K.pending, pending);
+    if (pending.swipes + pending.opens + pending.reads >= 10) flushActivity();
+  }
 }
 
 /* ---------- helpers ---------- */
@@ -56,7 +106,7 @@ $("date").textContent = new Date().toLocaleDateString("en-GB", { weekday: "short
 
 /* ---------- loading today's ten ---------- */
 async function fetchToday() {
-  const res = await fetch("/api/today", { cache: "no-store" });
+  const res = await api("/api/today");
   if (!res.ok) throw new Error(`Server returned ${res.status}`);
   const data = await res.json();
   if (!data.deck?.length) throw new Error("No stories came back from the feeds");
@@ -65,15 +115,16 @@ async function fetchToday() {
 
 async function ensureDeck(force = false) {
   const today = londonDate();
-  if (!force && deck && deck.date === today && deck.cards?.length) return renderAll();
+  const sameTopics = !me || (deck?.topics || []).join() === me.topics.join();
+  if (!force && deck && deck.date === today && deck.cards?.length && sameTopics) return renderAll();
   renderLoading();
   try {
     const data = await fetchToday();
-    deck = { date: data.date, cards: data.deck, pool: data.pool || [], index: 0, results: {}, shown: data.deck.map((c) => c.id), round: 1 };
+    deck = { date: data.date, topics: data.topics, cards: data.deck, pool: data.pool || [], index: 0, results: {}, shown: data.deck.map((c) => c.id), round: 1 };
     store(K.deck, deck);
     renderAll();
   } catch (err) {
-    renderError(err);
+    if (!(err instanceof SignInError)) renderError(err);
   }
 }
 
@@ -81,10 +132,10 @@ async function ensureDeck(force = false) {
 function dealMore() {
   const shown = new Set(deck.shown);
   const byTopic = {};
-  TOPIC_KEYS.forEach((t) => (byTopic[t] = deck.pool.filter((s) => s.topic === t && !shown.has(s.id))));
+  myTopics().forEach((t) => (byTopic[t] = deck.pool.filter((s) => s.topic === t && !shown.has(s.id))));
   const next = [];
-  while (next.length < 10 && TOPIC_KEYS.some((t) => byTopic[t].length)) {
-    for (const t of TOPIC_KEYS) {
+  while (next.length < 10 && myTopics().some((t) => byTopic[t].length)) {
+    for (const t of myTopics()) {
       const s = byTopic[t].shift();
       if (s && next.length < 10) next.push(s);
     }
@@ -120,7 +171,7 @@ async function ensureWhy(story) {
   if (!story || story.why || whyPending.has(story.id) || whyFailed.has(story.id)) return;
   whyPending.add(story.id);
   try {
-    const res = await fetch("/api/why", {
+    const res = await api("/api/why", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ title: story.title, summary: story.summary, source: story.source }),
@@ -400,7 +451,7 @@ async function loadArticle(story) {
   try {
     let a = articleCache.get(story.link);
     if (!a) {
-      const res = await fetch(`/api/article?url=${encodeURIComponent(story.link)}`);
+      const res = await api(`/api/article?url=${encodeURIComponent(story.link)}`);
       a = await res.json().catch(() => ({ ok: false, reason: `Server returned ${res.status}` }));
       if (a.ok) articleCache.set(story.link, a);
     }
@@ -524,7 +575,7 @@ function renderInterests() {
     kind === "save"
       ? saved.filter((s) => s.topic === t).length
       : decided.filter((e) => e.topic === t && e.kind === kind).length;
-  $("topics").innerHTML = TOPIC_KEYS.map((t) => {
+  $("topics").innerHTML = myTopics().map((t) => {
     const tp = TOPICS[t], l = count(t, "like"), s = count(t, "skip"), sv = count(t, "save"), total = l + s || 1;
     return `<div class="trow" style="--c:${tp.c}">
       <div class="name"><span class="dot"></span>${tp.name}</div>
@@ -561,6 +612,50 @@ document.addEventListener("visibilitychange", () => {
 
 function renderAll() { renderStack(); renderPips(); renderSaved(); renderInterests(); }
 
-renderSaved();
-renderInterests();
-ensureDeck();
+/* ---------- gate: shown when there's no valid invite link ---------- */
+function showGate(err) {
+  const kind = err?.kind || "signed-out";
+  $("gate-title").textContent = kind === "paused" ? "Your access is paused." : "Tenner is invite-only.";
+  $("gate-msg").textContent = kind === "paused"
+    ? "Martin has paused your account for now. Your saved stories are still on this phone."
+    : key
+      ? "This invite link doesn't work any more. Ask Martin for a new one, then open it or paste it below."
+      : "Open the invite link Martin sent you, or paste it below.";
+  $("gate-form").hidden = kind === "paused";
+  $("gate").hidden = false;
+}
+
+$("gate-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = $("gate-link").value.trim();
+  const m = text.match(/\/u\/([\w-]{8,64})/) || (KEY_RE.test(text) ? [null, text] : null);
+  if (!m) {
+    $("gate-error").textContent = "That doesn't look like a Tenner invite link. It should contain /u/ followed by a code.";
+    $("gate-error").hidden = false;
+    return;
+  }
+  store(K.key, m[1]);
+  // Drop any deck from a previous account so the new person's topics load.
+  try { localStorage.removeItem(K.deck); } catch {}
+  location.replace(`/u/${m[1]}`);
+});
+
+async function start() {
+  renderSaved();
+  renderInterests();
+  if (!key) return showGate();
+  try {
+    const res = await api("/api/me");
+    if (res.ok) {
+      me = await res.json();
+      $("signed-in").textContent = `Signed in as ${me.name}.`;
+    }
+  } catch (err) {
+    if (err instanceof SignInError) return;
+    // Offline: carry on with whatever is saved on the phone.
+  }
+  renderInterests();
+  ensureDeck();
+  flushActivity();
+}
+start();

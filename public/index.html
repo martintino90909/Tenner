@@ -80,6 +80,7 @@
           <div class="kw" id="sources"></div>
         </div>
         <p class="note" id="log-count"></p>
+        <p class="note" id="signed-in"></p>
       </div>
     </section>
   </main>
@@ -98,6 +99,20 @@
       Interests <span class="n">&nbsp;</span>
     </button>
   </nav>
+</div>
+
+<div class="gate" id="gate" hidden>
+  <div class="gate-inner">
+    <div class="wordmark">Tenner<span>.</span></div>
+    <h1 class="gate-title" id="gate-title">Tenner is invite-only.</h1>
+    <p class="gate-msg" id="gate-msg">Open the invite link Martin sent you, or paste it below.</p>
+    <form class="gate-form" id="gate-form" novalidate>
+      <label for="gate-link">Invite link</label>
+      <input id="gate-link" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://tenner…/u/…">
+      <p class="gate-error" id="gate-error" role="alert" hidden></p>
+      <button class="btn primary" type="submit">Sign in</button>
+    </form>
+  </div>
 </div>
 
 <div class="scrim" id="scrim" hidden></div>

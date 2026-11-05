@@ -26,7 +26,13 @@ export function cleanWhy(text) {
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 
-export async function handleWhy(request, env) {
+import { hashId } from "../lib/rss.js";
+
+// Everyone reading the same story shares one AI answer, cached for 3 days,
+// so extra readers don't use up the free daily allowance.
+const CACHE_SECONDS = 3 * 24 * 60 * 60;
+
+export async function handleWhy(request, env, ctx) {
   if (!env.AI) return json({ error: "AI is not set up for this Worker" }, 503);
   let body;
   try { body = await request.json(); } catch { return json({ error: "Expected JSON" }, 400); }
@@ -34,6 +40,13 @@ export async function handleWhy(request, env) {
   const summary = clip(body.summary, 600);
   const source = clip(body.source, 60);
   if (!title) return json({ error: "Missing title" }, 400);
+
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  const key = new Request(`https://tenner.cache/why/${hashId(source + "|" + title)}`);
+  if (cache) {
+    const hit = await cache.match(key);
+    if (hit) return json(await hit.json());
+  }
 
   try {
     const out = await env.AI.run(MODEL, {
@@ -47,6 +60,9 @@ export async function handleWhy(request, env) {
     const raw = typeof out?.response === "string" ? out.response : out?.choices?.[0]?.message?.content || "";
     const why = cleanWhy(raw);
     if (!why) return json({ error: "Empty answer from the model" }, 502);
+    if (cache && ctx) {
+      ctx.waitUntil(cache.put(key, new Response(JSON.stringify({ why }), { headers: { "cache-control": `public, max-age=${CACHE_SECONDS}` } })));
+    }
     return json({ why });
   } catch (err) {
     // On the free plan this is what happens if the daily allowance runs out.
