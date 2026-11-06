@@ -50,6 +50,10 @@ Each person can turn on a daily notification (You tab) and pick a time. A schedu
 
 Runs on each phone (`public/learn.js`); nothing leaves the device. Saves +3, opens +2, long reads +1, swipe right +1, swipe left −1, on the story's topic, source and headline keywords, fading 2% a day. After 15 swipes, each day's ten are the 8 best-scoring stories (max 4 per topic, 3 per source) plus 2 wildcards from the least-liked topics. The You tab shows the scores and lets each person nudge a topic (Less / Auto / More) or mute it.
 
+## Listen mode
+
+The reader has a Listen button that reads the headline, intro, "why it matters" and the article aloud with the phone's built-in voice (best British voice available). It speaks a paragraph at a time, highlights it, and has back/next, pause, speed (1×, 1.25×, 1.5×, 0.85×) and stop; tap a paragraph to jump there. It keeps the screen awake while playing. Listening to most of a story counts as a long read for learning. Code: `public/listen.js`.
+
 ## Checking the feeds
 
 Open `https://tenner.martintino90909.workers.dev/api/today?debug=1` to see every feed, whether it loaded, and how many stories it gave. To add or drop a source, edit `lib/sources.js`.

@@ -2,7 +2,7 @@
 // leave the device. Each action nudges scores for the story's topic, source
 // and headline keywords; older actions fade by 2% a day.
 
-export const SIGNALS = { save: 3, open: 2, readLong: 1, like: 1, skip: -1 };
+export const SIGNALS = { save: 3, open: 2, readLong: 1, like: 1, skip: -1 }; // readLong also covers listening
 export const DECAY_PER_DAY = 0.98;
 export const COLD_START = 15; // swipes before personalising kicks in
 const DAY = 24 * 60 * 60 * 1000;
@@ -42,7 +42,8 @@ export function buildProfile(log, { now = Date.now(), since = 0 } = {}) {
     else if (e.kind === "save") saved.set(e.id, e);
     else if (e.kind === "unsave") saved.delete(e.id);
     else if (e.kind === "open") { if (!opened.has(e.id)) meta.set(e.id + ":open", e); opened.add(e.id); }
-    else if (e.kind === "close" && ((e.ms || 0) >= 30000 || (e.depth || 0) >= 0.6)) { readLong.add(e.id); meta.set(e.id + ":read", e); }
+    else if ((e.kind === "close" && ((e.ms || 0) >= 30000 || (e.depth || 0) >= 0.6)) ||
+             (e.kind === "listen" && ((e.ms || 0) >= 30000 || (e.done || 0) >= 0.6))) { readLong.add(e.id); meta.set(e.id + ":read", e); }
   }
 
   const p = { topic: {}, source: {}, kw: {}, decisions: swipe.size, likes: 0, skips: 0 };

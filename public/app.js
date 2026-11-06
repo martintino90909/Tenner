@@ -3,6 +3,7 @@
 // so Phase 3 can learn from it.
 
 import { buildProfile, personalise, keywords, highlights, COLD_START } from "/learn.js";
+import { canSpeak, createPlayer, chunk } from "/listen.js";
 
 const TOPICS = {
   tech: { name: "Tech & engineering", short: "Tech", c: "var(--t-tech)" },
@@ -474,6 +475,7 @@ async function loadArticle(story) {
     if (reading?.story.id !== story.id) return;
     box.innerHTML = html;
     box.removeAttribute("aria-busy");
+    readyToListen(story);
   };
   try {
     let a = articleCache.get(story.link);
@@ -501,6 +503,89 @@ function setReaderSave() {
   if (b && reading) b.setAttribute("aria-pressed", String(saved.some((x) => x.id === reading.story.id)));
 }
 
+/* ---------- listen mode ---------- */
+const PLAY = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.6-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>`;
+const PAUSE = `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="4" height="14" rx="1.2"/><rect x="13.5" y="5" width="4" height="14" rx="1.2"/></svg>`;
+const PREV = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>`;
+const NEXT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`;
+
+let listening = null; // { story, player }
+
+function listenParts(story) {
+  const parts = [];
+  const add = (el, text) => chunk(text).forEach((t) => parts.push({ text: t, el }));
+  add($("sheet-h"), `${story.title}. From ${story.source}.`);
+  const lede = $("reader-lede");
+  if (lede) add(lede, lede.textContent);
+  const why = document.querySelector(`#sheet .why p:not(.why-loading)`);
+  if (why) add(why, `Why it matters. ${why.textContent}`);
+  if (!$("article").querySelector(".reader-fail")) {
+    $("article").querySelectorAll("p, h3, blockquote, li").forEach((el) => add(el, el.textContent));
+  }
+  return parts;
+}
+
+function readyToListen(story) {
+  const btn = $("listen-btn");
+  if (!btn || reading?.story.id !== story.id) return;
+  btn.disabled = false;
+  const words = listenParts(story).reduce((n, p) => n + p.text.split(" ").length, 0);
+  $("listen-len").textContent = `${Math.max(1, Math.round(words / 165))} min`;
+}
+
+function renderPlayer(st) {
+  const bar = $("player");
+  if (!bar) return;
+  const active = st.playing || st.index > 0;
+  bar.hidden = !active;
+  $("pl-toggle").innerHTML = st.playing ? PAUSE : PLAY;
+  $("pl-toggle").setAttribute("aria-label", st.playing ? "Pause" : "Play");
+  $("pl-rate").textContent = `${st.rate}×`;
+  $("pl-pos").textContent = st.total ? `${Math.min(st.index + 1, st.total)} / ${st.total}` : "";
+  const btn = $("listen-btn");
+  if (btn) btn.hidden = active;
+  document.querySelectorAll("#sheet .speaking").forEach((el) => el.classList.remove("speaking"));
+  const el = st.current?.el;
+  if (active && el) {
+    el.classList.add("speaking");
+    const box = $("reader-scroll").getBoundingClientRect(), r = el.getBoundingClientRect();
+    if (r.top < box.top + 40 || r.bottom > box.bottom - 80) el.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }
+}
+
+function wireListen(story) {
+  if (!canSpeak) return;
+  const player = createPlayer({
+    onChange: renderPlayer,
+    onFinish: (st) => { record(story, "listen", { ms: st.listenedMs, done: 1 }); listening = null; renderPlayer({ playing: false, index: 0, total: 0, rate: st.rate }); },
+  });
+  listening = { story, player };
+  $("listen-btn").onclick = () => { player.load(listenParts(story)); player.play(); };
+  $("pl-toggle").onclick = () => player.toggle();
+  $("pl-back").onclick = () => player.skip(-1);
+  $("pl-next").onclick = () => player.skip(1);
+  $("pl-rate").onclick = () => player.cycleRate();
+  $("pl-stop").onclick = () => stopListening();
+  // While listening, tap a paragraph to jump to it.
+  $("article").addEventListener("click", (e) => {
+    const el = e.target.closest("p, h3, blockquote, li");
+    if (!el || $("player").hidden) return;
+    const st = player.state;
+    if (!st.total) return;
+    const parts = listenParts(story);
+    const at = parts.findIndex((p) => p.el === el);
+    if (at >= 0) { player.load(parts); player.jumpTo(at); }
+  });
+}
+
+function stopListening() {
+  if (!listening) return;
+  const { story, player } = listening;
+  const st = player.stop();
+  if (st && st.listenedMs > 3000) record(story, "listen", { ms: st.listenedMs, done: st.total ? Math.round((st.index / st.total) * 100) / 100 : 0 });
+  listening = null;
+}
+
 function openSheet(story) {
   const tp = TOPICS[story.topic] || TOPICS.world;
   record(story, "open");
@@ -519,6 +604,7 @@ function openSheet(story) {
         <h2 class="reader-title" id="sheet-h">${esc(story.title)}</h2>
         ${story.summary ? `<p class="reader-lede" id="reader-lede">${esc(story.summary)}</p>` : ""}
         <div class="why" data-why="${esc(story.id)}">${whyHTML(story)}</div>
+        ${canSpeak ? `<button class="listen-btn" id="listen-btn" disabled>${PLAY}<span>Listen</span><small id="listen-len"></small></button>` : ""}
         <div class="article" id="article" aria-busy="true">
           <div class="bar" style="width:96%"></div><div class="bar" style="width:90%"></div><div class="bar" style="width:93%"></div><div class="bar" style="width:60%"></div>
           <div class="bar" style="width:94%;margin-top:14px"></div><div class="bar" style="width:88%"></div><div class="bar" style="width:72%"></div>
@@ -527,6 +613,14 @@ function openSheet(story) {
           <a class="btn" href="${esc(story.link)}" target="_blank" rel="noopener" id="reader-orig">Open on ${esc(story.source)}</a>
         </div>
       </div>
+    </div>
+    <div class="player" id="player" hidden>
+      <button class="icon-btn" id="pl-back" aria-label="Previous paragraph">${PREV}</button>
+      <button class="icon-btn pl-main" id="pl-toggle" aria-label="Pause">${PAUSE}</button>
+      <button class="icon-btn" id="pl-next" aria-label="Next paragraph">${NEXT}</button>
+      <button class="pl-rate" id="pl-rate" aria-label="Reading speed">1×</button>
+      <span class="pl-pos" id="pl-pos"></span>
+      <button class="icon-btn" id="pl-stop" aria-label="Stop listening">${CLOSE}</button>
     </div>`;
   sheet.querySelector(".reader-img")?.addEventListener("error", (e) => e.target.remove());
   $("scrim").hidden = false;
@@ -542,10 +636,12 @@ function openSheet(story) {
   setReaderSave();
   ensureWhy(story);
   loadArticle(story);
+  wireListen(story);
   $("reader-close").focus();
 }
 
 function closeSheet() {
+  stopListening();
   if (reading) {
     record(reading.story, "close", { ms: Date.now() - reading.openedAt, depth: Math.round(reading.depth * 100) / 100 });
     reading = null;
