@@ -284,3 +284,50 @@ nav button .n { font-family: var(--f-mono); font-size: 10px; }
 .gate-form input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .gate-form .btn { align-self: flex-start; margin-top: 6px; }
 .gate-error { margin: 0; color: var(--skip); font-size: 14px; }
+
+/* ---------- You: notification + learning ---------- */
+.card-panel { background: var(--surface); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.panel-title { font-family: var(--f-display); font-weight: 800; font-size: 19px; margin: 0; letter-spacing: -0.01em; }
+.pill { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; color: var(--muted); background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.pill.on { color: var(--like); background: color-mix(in srgb, var(--like) 15%, transparent); }
+.notify-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.notify-row label { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.notify-row input[type="time"] {
+  font: inherit; font-size: 16px; font-variant-numeric: tabular-nums; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); min-width: 0;
+}
+.notify-row input:disabled, .notify-row .btn:disabled { opacity: .45; }
+
+.progress { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 10px; }
+.progress span { display: block; height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s; }
+
+.topics .trow { grid-template-columns: 1fr auto; gap: 6px 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.topics .trow:last-child { border-bottom: 0; padding-bottom: 0; }
+.trow .score { font-family: var(--f-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.trow .track { grid-column: 1 / -1; position: relative; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.trow .track::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line); }
+.trow .fill { position: absolute; top: 0; bottom: 0; border-radius: 4px; transition: width .3s, left .3s; }
+.trow .fill.pos { background: var(--like); }
+.trow .fill.neg { background: color-mix(in srgb, var(--skip) 70%, var(--line)); }
+.trow .adjust { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.trow.muted .name, .trow.muted .track { opacity: .4; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 6px 12px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.trow .mute { border: 0; background: none; font-size: 13px; font-weight: 600; color: var(--muted); padding: 6px 4px; }
+.trow .mute[aria-pressed="true"] { color: var(--skip); }
+.trow.muted .seg { opacity: .4; pointer-events: none; }
+
+.kw span.m b { color: var(--skip); }
+.wild-tag { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); border: 1px dashed var(--accent); border-radius: 999px; padding: 0 7px; }
+
+.mix { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+.mix div { aspect-ratio: 3 / 4; max-width: 100%; border-radius: 5px; background: var(--c); }
+.mix div.wild { background: transparent; border: 2px dashed var(--c); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; background: var(--c); display: inline-block; }
+.legend i.wild { background: transparent; border: 2px dashed var(--muted); }
+.row-actions { display: flex; gap: 8px; }

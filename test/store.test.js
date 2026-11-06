@@ -99,3 +99,43 @@ test("a medicine-only person gets ten medicine stories", () => {
   const deck = pickDeck(pool, "2026-11-06", new Set(), 10, ["med"]);
   assert.equal(deck.length, 10);
 });
+
+test("notifications: subscribe, choose a time, and only send once in the window", () => {
+  const { store } = makeStore();
+  const a = store.create({ name: "Alex" });
+  const b = store.create({ name: "Liem" });
+  const sub = (n) => ({ endpoint: `https://web.push.apple.com/x${n}`, keys: { p256dh: "pk" + n, auth: "au" + n } });
+
+  assert.deepEqual(store.subscribe(a.token, sub(1), "07:30"), { devices: 1, time: "07:30" });
+  store.subscribe(a.token, sub(1), "07:30"); // same phone again: no duplicate
+  assert.equal(store.pushSettings(a.token).devices, 1);
+  store.subscribe(b.token, sub(2), "08:15");
+  assert.throws(() => store.subscribe(a.token, { endpoint: "http://bad" }), /valid/);
+  assert.equal(store.setNotifyTime(a.token, "25:99").time, "07:30", "bad times fall back to 07:30");
+
+  assert.deepEqual(store.due("2026-11-07", "07:15").map((u) => u.name), []);
+  const due = store.due("2026-11-07", "07:30");
+  assert.deepEqual(due.map((u) => u.name), ["Alex"]);
+  assert.equal(due[0].subs[0].endpoint, "https://web.push.apple.com/x1");
+  store.markNotified(due[0].id, "2026-11-07");
+  assert.deepEqual(store.due("2026-11-07", "07:45").map((u) => u.name), [], "once a day");
+  assert.deepEqual(store.due("2026-11-07", "09:30").map((u) => u.name), ["Liem"]);
+  assert.deepEqual(store.due("2026-11-07", "10:00").map((u) => u.name), [], "too late after the window");
+
+  store.update(b.id, { status: "paused" });
+  assert.deepEqual(store.due("2026-11-08", "08:30").map((u) => u.name), ["Alex"], "paused people get nothing");
+
+  assert.equal(store.list().find((u) => u.name === "Alex").pushDevices, 1);
+  store.unsubscribe(a.token, sub(1).endpoint);
+  assert.equal(store.pushSettings(a.token).devices, 0);
+  store.dropSub(sub(2).endpoint);
+  assert.equal(store.list().find((u) => u.name === "Liem").pushDevices, 0);
+});
+
+test("settings are stored as JSON", () => {
+  const { store } = makeStore();
+  assert.equal(store.getSetting("vapid"), null);
+  store.setSetting("vapid", { publicKey: "abc" });
+  store.setSetting("vapid", { publicKey: "def" });
+  assert.deepEqual(store.getSetting("vapid"), { publicKey: "def" });
+});

@@ -2,6 +2,8 @@
 // Phase 1: real feeds, swipe, open, save. Every action is logged on this phone
 // so Phase 3 can learn from it.
 
+import { buildProfile, personalise, keywords, highlights, COLD_START } from "/learn.js";
+
 const TOPICS = {
   tech: { name: "Tech & engineering", short: "Tech", c: "var(--t-tech)" },
   biz: { name: "Business & markets", short: "Business", c: "var(--t-biz)" },
@@ -12,7 +14,7 @@ const TOPICS = {
 };
 const TOPIC_KEYS = Object.keys(TOPICS);
 const myTopics = () => (me?.topics?.length ? me.topics.filter((t) => TOPICS[t]) : deck?.topics?.length ? deck.topics : ["tech", "biz", "cars", "world"]);
-const K = { deck: "tenner.deck", saved: "tenner.saved", log: "tenner.log", install: "tenner.installDismissed", key: "tenner.key", pending: "tenner.pendingActivity" };
+const K = { deck: "tenner.deck", saved: "tenner.saved", log: "tenner.log", install: "tenner.installDismissed", key: "tenner.key", pending: "tenner.pendingActivity", adjust: "tenner.adjust", since: "tenner.learnSince" };
 const LOG_LIMIT = 2000;
 
 /* ---------- storage ---------- */
@@ -69,7 +71,7 @@ function flushActivity() {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushActivity(); });
 
 function record(story, kind, extra = {}) {
-  log.push({ id: story.id, topic: story.topic, source: story.source, kind, t: Date.now(), ...extra });
+  log.push({ id: story.id, topic: story.topic, source: story.source, kind, t: Date.now(), kw: keywords(story.title), ...extra });
   if (log.length > LOG_LIMIT) log = log.slice(-LOG_LIMIT);
   store(K.log, log);
   const counter = { like: "swipes", skip: "swipes", open: "opens", read: "reads" }[kind];
@@ -106,6 +108,15 @@ function toast(msg) {
 
 $("date").textContent = new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/London" });
 
+/* ---------- learning (all on this phone) ---------- */
+let adjust = load(K.adjust, {});   // { topic: "more" | "less" | "mute" }
+let learnSince = load(K.since, 0); // "Reset learning" ignores actions before this
+const profileNow = () => buildProfile(log, { since: learnSince });
+
+function pickTen(pool, fallback, exclude = new Set()) {
+  return personalise({ pool, fallback, profile: profileNow(), adjust, topics: myTopics(), exclude });
+}
+
 /* ---------- loading today's ten ---------- */
 async function fetchToday() {
   const res = await api("/api/today");
@@ -122,7 +133,12 @@ async function ensureDeck(force = false) {
   renderLoading();
   try {
     const data = await fetchToday();
-    deck = { date: data.date, topics: data.topics, cards: data.deck, pool: data.pool || [], index: 0, results: {}, shown: data.deck.map((c) => c.id), round: 1 };
+    const pool = data.pool || [];
+    const ten = pickTen(pool, data.deck);
+    deck = {
+      date: data.date, topics: data.topics, cards: ten.cards, wildcards: ten.wildcards, personalised: ten.personalised,
+      pool, index: 0, results: {}, shown: ten.cards.map((c) => c.id), round: 1,
+    };
     store(K.deck, deck);
     renderAll();
   } catch (err) {
@@ -133,6 +149,14 @@ async function ensureDeck(force = false) {
 // "10 more": next batch from today's pool, balanced and interleaved by topic.
 function dealMore() {
   const shown = new Set(deck.shown);
+  const ten = pickTen(deck.pool, [], shown);
+  if (ten.personalised) {
+    if (!ten.cards.length) return toast("That's every story from today's feeds");
+    Object.assign(deck, { cards: ten.cards, wildcards: ten.wildcards, index: 0, results: {}, round: (deck.round || 1) + 1 });
+    deck.shown.push(...ten.cards.map((s) => s.id));
+    store(K.deck, deck);
+    return renderAll();
+  }
   const byTopic = {};
   myTopics().forEach((t) => (byTopic[t] = deck.pool.filter((s) => s.topic === t && !shown.has(s.id))));
   const next = [];
@@ -144,6 +168,7 @@ function dealMore() {
   }
   if (!next.length) return toast("That's every story from today's feeds");
   deck.cards = next;
+  deck.wildcards = [];
   deck.index = 0;
   deck.results = {};
   deck.shown.push(...next.map((s) => s.id));
@@ -208,7 +233,7 @@ function cardHTML(s, i) {
       <span class="stamp no">Not for me</span>
     </div>
     <div class="body">
-      <div class="meta"><span>${esc(s.source)}</span>${s.published ? `<span>·</span><span>${ago(s.published)}</span>` : ""}</div>
+      <div class="meta"><span>${esc(s.source)}</span>${s.published ? `<span>·</span><span>${ago(s.published)}</span>` : ""}${deck?.wildcards?.includes(s.id) ? `<span class="wild-tag" title="Something outside your usual picks">Wildcard</span>` : ""}</div>
       <h2 class="headline">${esc(s.title)}</h2>
       ${s.summary ? `<p class="summary">${esc(s.summary)}</p>` : ""}
       <div class="why" data-why="${esc(s.id)}">${whyHTML(s)}</div>
@@ -561,40 +586,202 @@ function renderSaved() {
   }));
 }
 
-/* ---------- Interests (Phase 1: raw counts) ---------- */
-function finalDecisions() {
-  const last = new Map();
-  for (const e of log) {
-    if (e.kind === "like" || e.kind === "skip") last.set(e.id, e);
-    else if (e.kind === "undo") last.delete(e.id);
-  }
-  return [...last.values()];
-}
+/* ---------- You: what Tenner has learned ---------- */
+const ADJ_LABEL = { less: "Less", auto: "Auto", more: "More" };
 
 function renderInterests() {
-  const decided = finalDecisions();
-  const count = (t, kind) =>
-    kind === "save"
-      ? saved.filter((s) => s.topic === t).length
-      : decided.filter((e) => e.topic === t && e.kind === kind).length;
-  $("topics").innerHTML = myTopics().map((t) => {
-    const tp = TOPICS[t], l = count(t, "like"), s = count(t, "skip"), sv = count(t, "save"), total = l + s || 1;
-    return `<div class="trow" style="--c:${tp.c}">
+  const p = profileNow();
+  const learning = p.decisions >= COLD_START;
+  const left = Math.max(0, COLD_START - p.decisions);
+  $("learn-lede").textContent = learning
+    ? `Your ten are picked from ${p.decisions} swipes, plus your opens, saves and long reads. Eight are your best matches; two are wildcards so the feed doesn't close in on itself.`
+    : `${left} more swipe${left === 1 ? "" : "s"} and Tenner starts picking your ten for you. Until then, each day is split evenly across your topics.`;
+  $("learn-progress").hidden = learning;
+  $("learn-bar").style.width = `${Math.min(100, (p.decisions / COLD_START) * 100)}%`;
+  $("tab-you").textContent = learning ? "learning" : `${left} to go`;
+
+  const topics = myTopics();
+  const max = Math.max(4, ...topics.map((t) => Math.abs(p.topic[t] || 0)));
+  $("topics").innerHTML = topics.map((t) => {
+    const tp = TOPICS[t], v = p.topic[t] || 0, w = (Math.abs(v) / max) * 50, mode = adjust[t] || "auto";
+    const bar = v >= 0 ? `left:50%;width:${w}%` : `left:${50 - w}%;width:${w}%`;
+    const seg = ["less", "auto", "more"].map((m) =>
+      `<button type="button" data-topic="${t}" data-mode="${m}" aria-pressed="${mode === m}">${ADJ_LABEL[m]}</button>`).join("");
+    return `<div class="trow${mode === "mute" ? " muted" : ""}" style="--c:${tp.c}">
       <div class="name"><span class="dot"></span>${tp.name}</div>
-      <div class="counts">${l} yes · ${s} no · ${sv} saved</div>
-      <div class="split"><span class="l" style="width:${(l / total) * 100}%"></span><span class="s" style="width:${(s / total) * 100}%"></span></div>
+      <div class="score">${mode === "mute" ? "muted" : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1)}</div>
+      <div class="track" aria-hidden="true"><div class="fill ${v >= 0 ? "pos" : "neg"}" style="${bar}"></div></div>
+      <div class="adjust">
+        <div class="seg" role="group" aria-label="${tp.name}">${seg}</div>
+        <button type="button" class="mute" data-topic="${t}" data-mode="mute" aria-pressed="${mode === "mute"}">${mode === "mute" ? "Unmute" : "Mute"}</button>
+      </div>
     </div>`;
   }).join("");
 
-  const bySource = {};
-  [...decided.filter((e) => e.kind === "like"), ...saved].forEach((e) => (bySource[e.source] = (bySource[e.source] || 0) + 1));
-  const top = Object.entries(bySource).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  $("sources").innerHTML = top.length
-    ? top.map(([n, v]) => `<span>${esc(n)}<b>${v}</b></span>`).join("")
-    : `<span>None yet</span>`;
-  const decisions = decided.length;
-  $("log-count").textContent = `${decisions} swipes recorded on this phone.`;
+  const h = highlights(p);
+  const chip = ([k, v], cls) => `<span class="${cls}">${esc(k)}<b>${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}</b></span>`;
+  $("kw-liked").innerHTML = h.liked.length ? h.liked.map((e) => chip(e, "p")).join("") : `<span>Nothing yet</span>`;
+  $("kw-avoided").innerHTML = h.avoided.map((e) => chip(e, "m")).join("");
+  $("kw-avoided").hidden = $("kw-avoided-label").hidden = !h.avoided.length;
+  $("sources").innerHTML = h.sources.length ? h.sources.map((e) => chip(e, "p")).join("") : `<span>None yet</span>`;
+
+  const cards = deck?.cards || [];
+  $("mix").innerHTML = cards.map((c) => `<div class="${deck.wildcards?.includes(c.id) ? "wild" : ""}" style="--c:${(TOPICS[c.topic] || TOPICS.world).c}" title="${esc(c.title)}"></div>`).join("");
+  $("legend").innerHTML = [...new Set(cards.map((c) => c.topic))].map((t) => `<span><i style="--c:${TOPICS[t].c}"></i>${TOPICS[t].short}</span>`).join("")
+    + (deck?.wildcards?.length ? `<span><i class="wild"></i>Wildcard</span>` : "");
+
+  $("log-count").textContent = `${p.decisions} swipes counted · ${p.likes} right, ${p.skips} left.`;
 }
+
+$("topics").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-mode]");
+  if (!b) return;
+  const t = b.dataset.topic;
+  let mode = b.dataset.mode;
+  if (mode === "mute" && adjust[t] === "mute") mode = "auto";
+  if (mode === "mute" && myTopics().filter((x) => adjust[x] !== "mute").length <= 1) return toast("Keep at least one topic on");
+  if (mode === "auto") delete adjust[t]; else adjust[t] = mode;
+  store(K.adjust, adjust);
+  renderInterests();
+  toast(mode === "mute" ? `${TOPICS[t].short} muted from your next ten` : mode === "auto" ? `${TOPICS[t].short} back to automatic` : `${ADJ_LABEL[mode]} ${TOPICS[t].short} from your next ten`);
+});
+
+let resetArmed = false;
+$("btn-reset").onclick = () => {
+  const b = $("btn-reset");
+  if (!resetArmed) {
+    resetArmed = true;
+    b.textContent = "Tap again to reset";
+    setTimeout(() => { resetArmed = false; b.textContent = "Reset learning"; }, 3500);
+    return;
+  }
+  resetArmed = false;
+  b.textContent = "Reset learning";
+  learnSince = Date.now();
+  adjust = {};
+  store(K.since, learnSince);
+  store(K.adjust, adjust);
+  renderInterests();
+  toast("Learning reset. Your saved stories are kept.");
+};
+
+/* ---------- morning notification ---------- */
+const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+let swReg = null;
+let pushState = { devices: 0, time: "07:30", publicKey: null, subscribed: false };
+
+function b64ToBytes(b64) {
+  const s = b64.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(s + "=".repeat((4 - (s.length % 4)) % 4));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
+
+function renderNotify(message) {
+  const on = pushState.subscribed && pushState.devices > 0;
+  $("notify-pill").textContent = on ? "On" : "Off";
+  $("notify-pill").className = `pill ${on ? "on" : ""}`;
+  $("notify-time").value = pushState.time;
+  $("notify-toggle").textContent = on ? "Turn off" : "Turn on";
+  $("notify-toggle").classList.toggle("primary", !on);
+  $("notify-test").hidden = !on;
+  let status = on ? `Your top headline arrives at ${pushState.time} each morning.` : "Get your top headline each morning.";
+  let canUse = true;
+  if (!pushSupported) {
+    canUse = false;
+    status = isIOS && !standalone
+      ? "On iPhone, add Tenner to your Home Screen first (Share, then Add to Home Screen). Open it from there to turn this on."
+      : "This browser can't receive notifications.";
+  } else if (Notification.permission === "denied") {
+    canUse = false;
+    status = "Notifications are blocked for Tenner. Turn them on in your phone's Settings, under Notifications.";
+  }
+  $("notify-toggle").disabled = !canUse;
+  $("notify-time").disabled = !canUse;
+  $("notify-status").textContent = message || status;
+}
+
+async function loadNotify() {
+  if (!pushSupported || !key) return renderNotify();
+  try {
+    swReg = await navigator.serviceWorker.register("/sw.js");
+    const [res, sub] = await Promise.all([api("/api/push"), swReg.pushManager.getSubscription()]);
+    if (res.ok) Object.assign(pushState, await res.json());
+    pushState.subscribed = !!sub;
+    // This phone has a subscription the server forgot (e.g. after a new link): send it again.
+    if (sub && !pushState.devices) await saveSubscription(sub);
+  } catch (err) {
+    if (err instanceof SignInError) return;
+  }
+  renderNotify();
+}
+
+async function saveSubscription(sub) {
+  const res = await api("/api/push/subscribe", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ subscription: sub.toJSON(), time: $("notify-time").value || pushState.time }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Server returned ${res.status}`);
+  Object.assign(pushState, data, { subscribed: true });
+}
+
+$("notify-toggle").onclick = async () => {
+  const btn = $("notify-toggle");
+  btn.disabled = true;
+  try {
+    swReg = swReg || (await navigator.serviceWorker.register("/sw.js"));
+    const existing = await swReg.pushManager.getSubscription();
+    if (pushState.subscribed && existing) {
+      await api("/api/push/unsubscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: existing.endpoint }) });
+      await existing.unsubscribe();
+      pushState.subscribed = false;
+      pushState.devices = Math.max(0, pushState.devices - 1);
+      renderNotify();
+      return toast("Morning notification off");
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return renderNotify(permission === "denied" ? undefined : "Tenner needs permission to send notifications. Tap Turn on again and choose Allow.");
+    if (!pushState.publicKey) Object.assign(pushState, await (await api("/api/push")).json());
+    const sub = existing || (await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(pushState.publicKey) }));
+    await saveSubscription(sub);
+    renderNotify();
+    toast(`Done. See you at ${pushState.time}.`);
+  } catch (err) {
+    if (!(err instanceof SignInError)) renderNotify(`Couldn't turn notifications on: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    if (!pushSupported) renderNotify();
+  }
+};
+
+$("notify-time").addEventListener("change", async () => {
+  const time = $("notify-time").value;
+  if (!/^\d\d:\d\d$/.test(time)) return;
+  pushState.time = time;
+  if (!pushState.subscribed) return renderNotify();
+  try {
+    const res = await api("/api/push/time", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ time }) });
+    if (res.ok) Object.assign(pushState, await res.json());
+    renderNotify();
+    toast(`Morning notification moved to ${pushState.time}`);
+  } catch {}
+});
+
+$("notify-test").onclick = async () => {
+  try {
+    const res = await api("/api/push/test", { method: "POST" });
+    const data = await res.json();
+    toast(data.sent ? "Test sent. It should arrive in a few seconds." : "The test couldn't be delivered. Try turning notifications off and on again.");
+  } catch (err) {
+    if (!(err instanceof SignInError)) toast(err.message);
+  }
+};
+
+// Tapping a notification while Tenner is open: make sure today's ten are loaded.
+navigator.serviceWorker?.addEventListener("message", (e) => {
+  if (e.data?.type === "tenner:refresh" && deck?.date !== londonDate()) ensureDeck(true);
+});
 
 /* ---------- tabs, install hint, day change ---------- */
 function show(view) {
@@ -657,7 +844,9 @@ async function start() {
     // Offline: carry on with whatever is saved on the phone.
   }
   renderInterests();
-  ensureDeck();
+  await ensureDeck();
+  renderInterests();
+  loadNotify();
   flushActivity();
 }
 start();

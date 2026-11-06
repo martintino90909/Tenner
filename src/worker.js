@@ -10,6 +10,7 @@ import { onRequestGet as today, feedStatus } from "./api.js";
 import { handleWhy } from "./why.js";
 import { handleArticle } from "./article.js";
 import { TennerStore, storeFor } from "./store-do.js";
+import { handlePush, runScheduled } from "./push.js";
 
 export { TennerStore };
 
@@ -103,6 +104,7 @@ export default {
       if (user instanceof Response) return user;
 
       if (path === "/api/me" && request.method === "GET") return json({ name: user.name, topics: user.topics });
+      if (path === "/api/push" || path.startsWith("/api/push/")) return handlePush(request, env, path, request.headers.get("x-tenner-key"));
       if (path === "/api/today" && request.method === "GET") return today({ request, waitUntil, topics: user.topics });
       if (path === "/api/article" && request.method === "GET") return handleArticle(request, ctx);
       if (path === "/api/why" && request.method === "POST") return handleWhy(request, env, ctx);
@@ -110,5 +112,10 @@ export default {
     }
 
     return env.ASSETS.fetch(request);
+  },
+
+  // Every 15 minutes: send morning notifications that are due.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runScheduled(env, ctx));
   },
 };

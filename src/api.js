@@ -21,7 +21,7 @@ async function fetchSource(src) {
 
 // The shared pool of today's stories is cached for 30 minutes; each person's
 // ten is then picked from it using their own topics.
-async function loadPool(origin, now, date, debug, waitUntil) {
+export async function loadPool(origin, now, date, debug, waitUntil) {
   const halfHour = Math.floor(now.getTime() / (30 * 60 * 1000));
   const cache = typeof caches !== "undefined" ? caches.default : null;
   const cacheKey = new Request(`${origin}/__pool2?d=${date}&b=${halfHour}`);

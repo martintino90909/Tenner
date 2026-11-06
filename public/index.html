@@ -65,19 +65,50 @@
       </div>
     </section>
 
-    <section class="view" id="view-interests" aria-label="Interests" hidden>
+    <section class="view" id="view-interests" aria-label="You" hidden>
       <div class="scroll">
+        <section class="card-panel" aria-labelledby="notify-h">
+          <div class="panel-head">
+            <h2 class="panel-title" id="notify-h">Morning notification</h2>
+            <span class="pill" id="notify-pill">Off</span>
+          </div>
+          <p class="note" id="notify-status">Get your top headline each morning.</p>
+          <div class="notify-row" id="notify-controls">
+            <label for="notify-time">Time</label>
+            <input type="time" id="notify-time" step="900" value="07:30">
+            <button class="btn primary" id="notify-toggle">Turn on</button>
+            <button class="btn" id="notify-test" hidden>Send a test</button>
+          </div>
+        </section>
+
         <div>
-          <h2 class="h2">Your swipes so far</h2>
-          <p class="lede">Tenner is recording every swipe, open and save. From Phase 3 it uses them to pick your ten. Until then, each day is split evenly across the four topics.</p>
+          <h2 class="h2">What Tenner has learned</h2>
+          <p class="lede" id="learn-lede">Swipe through today's cards and Tenner starts tailoring them to you.</p>
+          <div class="progress" id="learn-progress" hidden><span id="learn-bar"></span></div>
         </div>
         <div>
-          <p class="section-label">By topic</p>
+          <p class="section-label">Topics</p>
           <div class="topics" id="topics"></div>
+          <p class="note" style="margin-top:8px">Less, Auto or More nudges a topic yourself. Tap Mute to hide it completely.</p>
+        </div>
+        <div id="kw-block">
+          <p class="section-label">Stories you go for</p>
+          <div class="kw" id="kw-liked"></div>
+          <p class="section-label" style="margin-top:12px" id="kw-avoided-label">Stories you skip</p>
+          <div class="kw" id="kw-avoided"></div>
         </div>
         <div>
-          <p class="section-label">Top sources you liked</p>
+          <p class="section-label">Sources you like</p>
           <div class="kw" id="sources"></div>
+        </div>
+        <div>
+          <p class="section-label">Today's ten</p>
+          <div class="mix" id="mix"></div>
+          <div class="legend" id="legend"></div>
+        </div>
+        <p class="note">How it works: save +3, open +2, a long read +1, swipe right +1, swipe left −1. Older actions fade by 2% a day. Everything stays on this phone.</p>
+        <div class="row-actions">
+          <button class="btn" id="btn-reset">Reset learning</button>
         </div>
         <p class="note" id="log-count"></p>
         <p class="note" id="signed-in"></p>
@@ -96,7 +127,7 @@
     </button>
     <button role="tab" aria-selected="false" data-view="interests">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
-      Interests <span class="n">&nbsp;</span>
+      You <span class="n" id="tab-you">&nbsp;</span>
     </button>
   </nav>
 </div>

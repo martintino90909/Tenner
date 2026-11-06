@@ -229,6 +229,7 @@ function personHTML(u) {
       <div><b>${u.opens}</b><span>opened</span></div>
       <div><b>${u.reads}</b><span>read in full</span></div>
     </div>
+    <p class="msg">${u.pushDevices ? `Morning notification at ${esc(u.notifyTime)} on ${u.pushDevices} phone${u.pushDevices > 1 ? "s" : ""}` : "Morning notification off"}</p>
     <div class="chips" data-topics>${chipsHTML(u.topics, "t")}</div>
     ${justAdded === u.id ? `<div class="link-box">${esc(inviteLink(u))}</div>` : ""}
     <div class="row">

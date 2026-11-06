@@ -42,6 +42,14 @@ Tenner is invite-only. Each person gets a personal link (`/u/<key>`); opening it
 
 Manage people at `/admin`: add someone (pick their topics), copy their invite message, pause or resume them, make a new link (the old one stops working), or remove them. The admin key is not in this repo; only its SHA-256 hash is (`ADMIN_KEY_SHA256` in `wrangler.jsonc`). To change the key, put the hash of a new random key there and redeploy.
 
+## Morning notification
+
+Each person can turn on a daily notification (You tab) and pick a time. A schedule runs every 15 minutes and sends their top headline once a day, within 90 minutes of their chosen time (London time). It uses standard Web Push with encryption built on WebCrypto (`lib/webpush.js`, tested against the RFC 8291 example); the signing keys are generated on first use and kept in the Durable Object. On iPhone, Tenner must be added to the Home Screen first.
+
+## Learning
+
+Runs on each phone (`public/learn.js`); nothing leaves the device. Saves +3, opens +2, long reads +1, swipe right +1, swipe left −1, on the story's topic, source and headline keywords, fading 2% a day. After 15 swipes, each day's ten are the 8 best-scoring stories (max 4 per topic, 3 per source) plus 2 wildcards from the least-liked topics. The You tab shows the scores and lets each person nudge a topic (Less / Auto / More) or mute it.
+
 ## Checking the feeds
 
 Open `https://tenner.martintino90909.workers.dev/api/today?debug=1` to see every feed, whether it loaded, and how many stories it gave. To add or drop a source, edit `lib/sources.js`.
