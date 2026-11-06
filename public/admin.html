@@ -55,6 +55,13 @@
     .msg { margin: 0; font-size: 14px; color: var(--muted); }
     .msg.error { color: var(--skip); }
     .empty { margin: 0; }
+    .feed-group { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+    .feed-group h3 { margin: 0 0 2px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--c); }
+    .feed { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: baseline; font-size: 14px; }
+    .feed .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--like); align-self: center; }
+    .feed.bad .dot { background: var(--skip); }
+    .feed small { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+    .feed.bad small { color: var(--skip); }
     @media (max-width: 420px) { .stats { grid-template-columns: repeat(2, 1fr); } }
   </style>
 </head>
@@ -97,6 +104,14 @@
         <button class="btn small" id="refresh">Refresh</button>
       </div>
       <div class="people" id="people"></div>
+      <section class="panel" style="margin-top:10px">
+        <div class="row" style="justify-content:space-between">
+          <h2>Sources</h2>
+          <button class="btn small" id="check-feeds">Check feeds</button>
+        </div>
+        <p class="msg">Whether each news feed is loading right now. A failing feed is skipped; the rest still work.</p>
+        <div id="feeds"></div>
+      </section>
       <p class="msg" id="sign-out-row"><button class="btn small" id="sign-out">Sign out of admin</button></p>
     </section>
   </div>
@@ -286,6 +301,26 @@ $("people").addEventListener("click", async (e) => {
     }
   } catch (err) { toast(err.message); }
 });
+
+/* ---------- sources ---------- */
+async function checkFeeds() {
+  const box = $("feeds");
+  box.innerHTML = `<p class="msg">Checking ${"\u2026"}</p>`;
+  try {
+    const { feeds } = await call("/api/admin/feeds");
+    box.innerHTML = KEYS.map((k) => {
+      const list = feeds.filter((f) => f.topic === k);
+      if (!list.length) return "";
+      return `<div class="feed-group" style="--c:${TOPICS[k].c}"><h3>${TOPICS[k].name}</h3>${list.map((f) => {
+        const info = f.ok ? `${f.stories} stories${f.newestHoursAgo != null ? ` · newest ${f.newestHoursAgo < 48 ? f.newestHoursAgo + "h" : Math.round(f.newestHoursAgo / 24) + "d"} ago` : ""}` : esc(f.error || "Not loading");
+        return `<div class="feed${f.ok ? "" : " bad"}"><span class="dot"></span><span>${esc(f.name)}</span><small>${info}</small></div>`;
+      }).join("")}</div>`;
+    }).join("");
+    const bad = feeds.filter((f) => !f.ok).length;
+    toast(bad ? `${bad} feed${bad > 1 ? "s" : ""} not loading` : "All feeds loading");
+  } catch (err) { box.innerHTML = `<p class="msg error">${esc(err.message)}</p>`; }
+}
+$("check-feeds").onclick = checkFeeds;
 
 $("refresh").onclick = () => refresh().then(() => toast("Up to date")).catch((e) => toast(e.message));
 $("sign-out").onclick = () => { save(null); adminKey = null; showLogin(); };

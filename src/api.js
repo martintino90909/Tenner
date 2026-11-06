@@ -38,6 +38,25 @@ async function loadPool(origin, now, date, debug, waitUntil) {
   return { pool, results };
 }
 
+// Admin: whether each feed is loading, and how many stories it gave.
+export async function feedStatus() {
+  const results = await Promise.allSettled(SOURCES.map(fetchSource));
+  const now = Date.now();
+  return SOURCES.map((s, i) => {
+    const r = results[i];
+    const items = r.status === "fulfilled" ? r.value : [];
+    const newest = items.reduce((m, it) => Math.max(m, it.published || 0), 0) || null;
+    return {
+      name: s.name,
+      topic: s.topic,
+      ok: r.status === "fulfilled",
+      stories: items.length,
+      newestHoursAgo: newest ? Math.round((now - newest) / 3600000) : null,
+      error: r.status === "rejected" ? String(r.reason?.message || r.reason) : undefined,
+    };
+  });
+}
+
 export async function onRequestGet({ request, waitUntil, topics = DEFAULT_TOPICS }) {
   const url = new URL(request.url);
   const debug = url.searchParams.has("debug");

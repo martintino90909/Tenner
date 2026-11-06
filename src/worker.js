@@ -6,7 +6,7 @@
 // Admin calls need Martin's admin key (header "x-tenner-admin"), whose
 // SHA-256 hash is in wrangler.jsonc as ADMIN_KEY_SHA256.
 
-import { onRequestGet as today } from "./api.js";
+import { onRequestGet as today, feedStatus } from "./api.js";
 import { handleWhy } from "./why.js";
 import { handleArticle } from "./article.js";
 import { TennerStore, storeFor } from "./store-do.js";
@@ -64,6 +64,7 @@ async function adminRoutes(request, env, path) {
   const body = request.method === "GET" || request.method === "DELETE" ? {} : await request.json().catch(() => ({}));
   try {
     if (path === "/api/admin/users" && request.method === "GET") return json({ users: await store.list() });
+    if (path === "/api/admin/feeds" && request.method === "GET") return json({ feeds: await feedStatus() });
     if (path === "/api/admin/users" && request.method === "POST") return json({ user: await store.create(body) });
     const m = path.match(/^\/api\/admin\/users\/([\w-]+)(\/reset)?$/);
     if (m && m[2] && request.method === "POST") return json({ user: await store.resetLink(m[1]) });
