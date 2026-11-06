@@ -8,6 +8,7 @@
 
 import { onRequestGet as today, feedStatus } from "./api.js";
 import { handleWhy } from "./why.js";
+import { handleTerms, handleExplain } from "./explain.js";
 import { handleArticle } from "./article.js";
 import { TennerStore, storeFor } from "./store-do.js";
 import { handlePush, runScheduled } from "./push.js";
@@ -108,6 +109,8 @@ export default {
       if (path === "/api/today" && request.method === "GET") return today({ request, waitUntil, topics: user.topics });
       if (path === "/api/article" && request.method === "GET") return handleArticle(request, ctx);
       if (path === "/api/why" && request.method === "POST") return handleWhy(request, env, ctx);
+      if (path === "/api/terms" && request.method === "POST") return handleTerms(request, env, ctx);
+      if (path === "/api/explain" && request.method === "POST") return handleExplain(request, env, ctx);
       return json({ error: "not-found" }, 404);
     }
 

@@ -15,7 +15,7 @@ const TOPICS = {
 };
 const TOPIC_KEYS = Object.keys(TOPICS);
 const myTopics = () => (me?.topics?.length ? me.topics.filter((t) => TOPICS[t]) : deck?.topics?.length ? deck.topics : ["tech", "biz", "cars", "world"]);
-const K = { deck: "tenner.deck", saved: "tenner.saved", log: "tenner.log", install: "tenner.installDismissed", key: "tenner.key", pending: "tenner.pendingActivity", adjust: "tenner.adjust", since: "tenner.learnSince" };
+const K = { deck: "tenner.deck", saved: "tenner.saved", log: "tenner.log", install: "tenner.installDismissed", key: "tenner.key", pending: "tenner.pendingActivity", adjust: "tenner.adjust", since: "tenner.learnSince", termHint: "tenner.termHintSeen" };
 const LOG_LIMIT = 2000;
 
 /* ---------- storage ---------- */
@@ -466,6 +466,7 @@ async function downloadForOffline(story) {
       const res = await api(`/api/article?url=${encodeURIComponent(story.link)}`);
       a = await res.json().catch(() => ({ ok: false }));
     }
+    if (a.ok && !a.terms) { try { a.terms = await fetchTerms(story, a); } catch {} }
     // Paywalled stories can't be downloaded; keep the headline and intro instead.
     const body = a.ok ? a : { ok: false, reason: "Only the headline and intro could be saved for this story" };
     await cache.put(offlineKey(story.link), new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } }));
@@ -576,6 +577,7 @@ async function loadArticle(story) {
     $("reader-time").textContent = `${a.minutes} min read`;
     done(articleHTML(a));
     record(story, "read", { words: a.words });
+    loadTerms(story, a);
   } catch (err) {
     done(`<div class="reader-fail"><p><b>Couldn't show the full story here.</b> ${esc(err.message)}.</p>
       <a class="btn primary" href="${esc(story.link)}" target="_blank" rel="noopener">Read on ${esc(story.source)}</a></div>`);
@@ -586,6 +588,134 @@ function setReaderSave() {
   const b = $("reader-save");
   if (b && reading) b.setAttribute("aria-pressed", String(saved.some((x) => x.id === reading.story.id)));
 }
+
+/* ---------- explain this ---------- */
+let explainState = null; // { story, terms, phrase, passage }
+
+async function fetchTerms(story, a) {
+  if (a.terms) return a.terms;
+  const res = await api("/api/terms", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ url: story.link, title: story.title, text: a.blocks.map((b) => b.text).join("\n").slice(0, 6000) }),
+  });
+  const data = await res.json().catch(() => ({ terms: [] }));
+  return Array.isArray(data.terms) ? data.terms : [];
+}
+
+async function loadTerms(story, a) {
+  try {
+    const terms = a.terms || (navigator.onLine ? await fetchTerms(story, a) : []);
+    a.terms = terms;
+    if (reading?.story.id !== story.id || !terms.length) return;
+    explainState = { ...(explainState || {}), story, terms };
+    underlineTerms(terms);
+    if (!load(K.termHint, false) && $("article").querySelector(".term")) {
+      $("article").insertAdjacentHTML("afterbegin", `<p class="terms-hint">Tap an underlined term for a quick explanation, or highlight any words and tap Explain.</p>`);
+    }
+  } catch {
+    // No underlines this time; the article still reads fine.
+  }
+}
+
+// Wraps the first use of each term in a tappable button.
+function underlineTerms(terms) {
+  const box = $("article");
+  terms.forEach((t, i) => {
+    const needle = t.term.toLowerCase();
+    const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.parentElement.closest("p, li, blockquote") && !n.parentElement.closest(".term, .terms-hint") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+    });
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = node.nodeValue;
+      let at = text.toLowerCase().indexOf(needle);
+      while (at >= 0) {
+        const before = text[at - 1], after = text[at + needle.length];
+        if (!(before && /[\p{L}\p{N}]/u.test(before)) && !(after && /[\p{L}\p{N}]/u.test(after))) break;
+        at = text.toLowerCase().indexOf(needle, at + 1);
+      }
+      if (at < 0) continue;
+      const match = node.splitText(at);
+      match.splitText(needle.length);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "term";
+      btn.dataset.i = String(i);
+      btn.textContent = match.nodeValue;
+      match.replaceWith(btn);
+      return;
+    }
+  });
+}
+
+function showExplain(term, text, loading = false) {
+  $("explain-chip").hidden = true;
+  $("ex-term").textContent = term;
+  $("ex-text").textContent = text;
+  $("ex-text").classList.toggle("loading", loading);
+  $("explain-card").hidden = false;
+}
+
+function hideExplain() {
+  const card = $("explain-card");
+  if (card) card.hidden = true;
+}
+
+async function explainPhrase(story, phrase, passage) {
+  showExplain(phrase, "Explaining…", true);
+  record(story, "explain");
+  try {
+    const res = await api("/api/explain", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phrase, passage, title: story.title }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if ($("ex-term").textContent !== phrase) return; // they've moved on
+    showExplain(phrase, data.explanation || data.error || "No explanation came back. Try again.");
+  } catch (err) {
+    if (!(err instanceof SignInError)) showExplain(phrase, navigator.onLine ? "Explanations aren't available right now." : "You're offline. Explanations need a connection.");
+  }
+}
+
+function wireExplain(story) {
+  explainState = { story, terms: [] };
+  $("ex-close").onclick = hideExplain;
+  $("article").addEventListener("click", (e) => {
+    const t = e.target.closest(".term");
+    if (!t || !explainState?.terms) return;
+    e.stopPropagation();
+    const term = explainState.terms[Number(t.dataset.i)];
+    if (!term) return;
+    showExplain(t.textContent, term.explanation);
+    record(story, "explain");
+    if (!load(K.termHint, false)) { store(K.termHint, true); document.querySelector(".terms-hint")?.remove(); }
+  });
+  $("explain-chip").onclick = () => {
+    if (explainState?.phrase) explainPhrase(story, explainState.phrase, explainState.passage);
+    window.getSelection()?.removeAllRanges();
+  };
+}
+
+// Highlight any words in the article to get an Explain button.
+let selTimer;
+document.addEventListener("selectionchange", () => {
+  clearTimeout(selTimer);
+  selTimer = setTimeout(() => {
+    const chip = $("explain-chip");
+    if (!chip || !reading || !explainState) return;
+    const sel = window.getSelection();
+    const phrase = (sel?.toString() || "").replace(/\s+/g, " ").trim().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+    const anchor = sel?.anchorNode?.parentElement;
+    const block = anchor?.closest("#article p, #article li, #article blockquote, #article h3");
+    const ok = block && phrase.length >= 2 && phrase.length <= 80 && phrase.split(" ").length <= 8;
+    if (!ok) { chip.hidden = true; return; }
+    explainState.phrase = phrase;
+    explainState.passage = block.textContent;
+    chip.textContent = `Explain \u201C${phrase.length > 32 ? phrase.slice(0, 30) + "…" : phrase}\u201D`;
+    chip.hidden = false;
+  }, 250);
+});
 
 /* ---------- listen mode ---------- */
 const PLAY = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.6-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>`;
@@ -604,7 +734,7 @@ function listenParts(story) {
   const why = document.querySelector(`#sheet .why p:not(.why-loading)`);
   if (why) add(why, `Why it matters. ${why.textContent}`);
   if (!$("article").querySelector(".reader-fail")) {
-    $("article").querySelectorAll("p, h3, blockquote, li").forEach((el) => add(el, el.textContent));
+    $("article").querySelectorAll("p:not(.terms-hint), h3, blockquote, li").forEach((el) => add(el, el.textContent));
   }
   return parts;
 }
@@ -652,6 +782,7 @@ function wireListen(story) {
   $("pl-stop").onclick = () => stopListening();
   // While listening, tap a paragraph to jump to it.
   $("article").addEventListener("click", (e) => {
+    if (e.target.closest(".term")) return;
     const el = e.target.closest("p, h3, blockquote, li");
     if (!el || $("player").hidden) return;
     const st = player.state;
@@ -698,6 +829,12 @@ function openSheet(story) {
         </div>
       </div>
     </div>
+    <div class="explain-card" id="explain-card" role="dialog" aria-live="polite" hidden>
+      <div class="ex-head"><b id="ex-term"></b><button class="icon-btn" id="ex-close" aria-label="Close explanation">${CLOSE}</button></div>
+      <p id="ex-text"></p>
+      <small>AI explanation. It can be wrong; check anything important.</small>
+    </div>
+    <button class="explain-chip" id="explain-chip" hidden></button>
     <div class="player" id="player" hidden>
       <button class="icon-btn" id="pl-back" aria-label="Previous paragraph">${PREV}</button>
       <button class="icon-btn pl-main" id="pl-toggle" aria-label="Pause">${PAUSE}</button>
@@ -721,11 +858,13 @@ function openSheet(story) {
   ensureWhy(story);
   loadArticle(story);
   wireListen(story);
+  wireExplain(story);
   $("reader-close").focus();
 }
 
 function closeSheet() {
   stopListening();
+  explainState = null;
   if (reading) {
     record(reading.story, "close", { ms: Date.now() - reading.openedAt, depth: Math.round(reading.depth * 100) / 100 });
     reading = null;

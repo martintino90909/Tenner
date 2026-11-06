@@ -370,3 +370,33 @@ nav button .n { font-family: var(--f-mono); font-size: 10px; }
 .off-tag { color: var(--like); font-weight: 600; }
 .off-tag.part { color: var(--muted); }
 .off-tag.busy { color: var(--muted); font-weight: 500; }
+
+/* ---------- Explain this ---------- */
+.term {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; display: inline;
+  text-align: inherit; line-height: inherit; cursor: pointer;
+  text-decoration: underline dotted var(--accent); text-decoration-thickness: 2px; text-underline-offset: 4px;
+}
+.term:hover, .term:focus-visible { background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: 3px; }
+.terms-hint { font-size: 13px !important; line-height: 1.45 !important; color: var(--muted); border-left: 3px solid var(--accent); padding-left: 10px; }
+.explain-card {
+  flex: none; display: flex; flex-direction: column; gap: 4px;
+  margin: 0 max(12px, env(safe-area-inset-right, 0px)) 8px max(12px, env(safe-area-inset-left, 0px));
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
+  padding: 4px 6px 12px 16px;
+}
+.ex-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ex-head b { font-family: var(--f-display); font-size: 17px; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.explain-card p { margin: 0 10px 0 0; font-size: 15px; line-height: 1.5; color: var(--ink); }
+.explain-card p.loading { color: var(--muted); }
+.explain-card small { font-size: 11.5px; color: var(--muted); margin-right: 10px; }
+.explain-chip {
+  flex: none; align-self: center; margin: 0 16px 8px; max-width: calc(100% - 32px);
+  border: 0; border-radius: 999px; padding: 9px 16px; font-weight: 600; font-size: 14px;
+  background: var(--ink); color: var(--bg); box-shadow: var(--shadow);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Clear the iPhone home bar unless the player bar sits below. */
+.explain-card, .explain-chip { margin-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+.sheet.reader:has(.player:not([hidden])) .explain-card,
+.sheet.reader:has(.player:not([hidden])) .explain-chip { margin-bottom: 8px; }

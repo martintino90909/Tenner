@@ -58,6 +58,10 @@ The reader has a Listen button that reads the headline, intro, "why it matters" 
 
 The service worker (`public/sw.js`) keeps a copy of the app, network first, so Tenner opens with no signal and updates still arrive straight away online. Saving a story downloads its full text (and photo) into the phone's cache; the Saved list shows "Offline ready". Stories saved before this, or while offline, download next time the app is online. Unsaving removes the download.
 
+## Explain this
+
+When an article opens, `/api/terms` asks Workers AI for up to 6 jargon terms with one-line plain-English explanations; the reader underlines the first use of each, and tapping one shows the explanation. Highlighting any words (up to 8) shows an Explain button that calls `/api/explain` with the surrounding paragraph. Both are cached and shared for a week, so an article's terms are generated once for everyone. Saved stories keep their terms for offline reading. Prompts and parsing: `lib/explain.js`.
+
 ## Checking the feeds
 
 Open `https://tenner.martintino90909.workers.dev/api/today?debug=1` to see every feed, whether it loaded, and how many stories it gave. To add or drop a source, edit `lib/sources.js`.
