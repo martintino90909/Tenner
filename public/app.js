@@ -62,7 +62,7 @@ async function api(path, opts = {}) {
 // Saved stories and swipes themselves never leave the phone.
 let pending = load(K.pending, { swipes: 0, opens: 0, reads: 0 });
 function flushActivity() {
-  if (!key || !(pending.swipes || pending.opens || pending.reads)) return;
+  if (!key || !navigator.onLine || !(pending.swipes || pending.opens || pending.reads)) return;
   const body = JSON.stringify({ key, ...pending });
   const sent = navigator.sendBeacon?.("/api/activity", new Blob([body], { type: "application/json" }));
   if (!sent) fetch("/api/activity", { method: "POST", body, headers: { "content-type": "application/json" }, keepalive: true }).catch(() => {});
@@ -280,11 +280,12 @@ function renderError(err) {
   $("serial").textContent = "";
   $("stack").innerHTML = `
     <div class="card message">
-      <h2>Couldn't load today's news.</h2>
-      <p>${esc(err.message)}. Check you're online, then try again.</p>
-      <div class="btn-row"><button class="btn primary" id="retry">Try again</button></div>
+      <h2>${navigator.onLine ? "Couldn't load today's news." : "You're offline."}</h2>
+      <p>${navigator.onLine ? `${esc(err.message)}. Try again in a moment.` : "Today's ten will load when you have signal. Your saved stories are ready to read now."}</p>
+      <div class="btn-row"><button class="btn primary" id="retry">Try again</button>${saved.length ? `<button class="btn" id="err-saved">Open saved</button>` : ""}</div>
     </div>`;
   $("retry").onclick = () => ensureDeck(true);
+  $("err-saved") && ($("err-saved").onclick = () => show("saved"));
 }
 
 let shownAt = Date.now();
@@ -430,14 +431,90 @@ $("btn-save").onclick = () => {
   $("btn-save").setAttribute("aria-pressed", String(saved.some((x) => x.id === story.id)));
 };
 
+/* ---------- offline saves ---------- */
+// Saving a story also downloads its full text and photo into the phone's
+// cache, so it opens with no signal. The service worker serves the photo.
+const OFFLINE_CACHE = "tenner-saved-v1";
+const hasCache = "caches" in window;
+const offlineKey = (link) => `/offline/article?u=${encodeURIComponent(link)}`;
+const downloading = new Set();
+
+async function offlineArticle(link) {
+  if (!hasCache) return null;
+  try {
+    const hit = await (await caches.open(OFFLINE_CACHE)).match(offlineKey(link));
+    return hit ? await hit.json() : null;
+  } catch { return null; }
+}
+
+function markOffline(id, value) {
+  const s = saved.find((x) => x.id === id);
+  if (!s) return;
+  s.offline = value;
+  store(K.saved, saved);
+  renderSaved();
+}
+
+async function downloadForOffline(story) {
+  if (!hasCache || downloading.has(story.id) || !navigator.onLine) return;
+  downloading.add(story.id);
+  renderSaved();
+  try {
+    const cache = await caches.open(OFFLINE_CACHE);
+    let a = articleCache.get(story.link);
+    if (!a) {
+      const res = await api(`/api/article?url=${encodeURIComponent(story.link)}`);
+      a = await res.json().catch(() => ({ ok: false }));
+    }
+    // Paywalled stories can't be downloaded; keep the headline and intro instead.
+    const body = a.ok ? a : { ok: false, reason: "Only the headline and intro could be saved for this story" };
+    await cache.put(offlineKey(story.link), new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } }));
+    if (story.image) {
+      try {
+        const img = await fetch(story.image, { mode: "no-cors", referrerPolicy: "no-referrer" });
+        await cache.put(story.image, img);
+      } catch {}
+    }
+    markOffline(story.id, a.ok ? "full" : "intro");
+  } catch {
+    // Try again next time the app opens.
+  } finally {
+    downloading.delete(story.id);
+    renderSaved();
+  }
+}
+
+async function removeOffline(story) {
+  if (!hasCache) return;
+  try {
+    const cache = await caches.open(OFFLINE_CACHE);
+    await cache.delete(offlineKey(story.link));
+    if (story.image) await cache.delete(story.image);
+  } catch {}
+}
+
+// Saved stories from before this feature, or saved while offline.
+async function backfillOffline() {
+  if (!navigator.onLine) return;
+  for (const s of saved.filter((x) => !x.offline).slice(0, 15)) await downloadForOffline(s);
+}
+
+function renderOnline() {
+  $("offline-pill").hidden = navigator.onLine;
+}
+window.addEventListener("online", () => { renderOnline(); backfillOffline(); flushActivity(); });
+window.addEventListener("offline", renderOnline);
+
 function toggleSave(story) {
   const i = saved.findIndex((x) => x.id === story.id);
   if (i === -1) {
     saved.unshift({ ...story, savedAt: Date.now() });
     record(story, "save");
-    toast("Saved for later");
+    toast(navigator.onLine ? "Saved. Downloading for offline reading." : "Saved. It'll download when you're back online.");
+    downloadForOffline(saved[0]);
   } else {
-    saved.splice(i, 1);
+    const [gone] = saved.splice(i, 1);
+    removeOffline(gone);
     record(story, "unsave");
     toast("Removed from saved");
   }
@@ -479,9 +556,16 @@ async function loadArticle(story) {
   };
   try {
     let a = articleCache.get(story.link);
+    if (!a && saved.some((x) => x.id === story.id && x.offline === "full")) a = await offlineArticle(story.link);
     if (!a) {
-      const res = await api(`/api/article?url=${encodeURIComponent(story.link)}`);
-      a = await res.json().catch(() => ({ ok: false, reason: `Server returned ${res.status}` }));
+      if (!navigator.onLine) {
+        const cached = await offlineArticle(story.link);
+        if (cached) a = cached;
+        else throw new Error("You're offline, and this story isn't saved. Save stories while you have signal to read them on the go");
+      } else {
+        const res = await api(`/api/article?url=${encodeURIComponent(story.link)}`);
+        a = await res.json().catch(() => ({ ok: false, reason: `Server returned ${res.status}` }));
+      }
       if (a.ok) articleCache.set(story.link, a);
     }
     if (reading?.story.id !== story.id) return;
@@ -656,6 +740,14 @@ document.addEventListener("keydown", (e) => {
 });
 
 /* ---------- Saved ---------- */
+function offlineLabel(s) {
+  if (!hasCache) return "";
+  if (downloading.has(s.id)) return ` · <span class="off-tag busy">Downloading</span>`;
+  if (s.offline === "full") return ` · <span class="off-tag">Offline ready</span>`;
+  if (s.offline === "intro") return ` · <span class="off-tag part">Intro only</span>`;
+  return "";
+}
+
 function renderSaved() {
   $("tab-saved").textContent = saved.length;
   const list = $("saved-list");
@@ -667,7 +759,7 @@ function renderSaved() {
     .map((s) => {
       const tp = TOPICS[s.topic] || TOPICS.world;
       return `<div class="saved-item" style="--c:${tp.c}"><span class="stripe"></span>
-        <button class="saved-open" data-open="${esc(s.id)}"><h3>${esc(s.title)}</h3><small>${tp.short} · ${esc(s.source)}</small></button>
+        <button class="saved-open" data-open="${esc(s.id)}"><h3>${esc(s.title)}</h3><small>${tp.short} · ${esc(s.source)}${offlineLabel(s)}</small></button>
         <button data-id="${esc(s.id)}" aria-label="Remove from saved">Remove</button></div>`;
     })
     .join("");
@@ -928,6 +1020,9 @@ $("gate-form").addEventListener("submit", (e) => {
 async function start() {
   renderSaved();
   renderInterests();
+  renderOnline();
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").then((r) => (swReg = r)).catch(() => {});
+  try { navigator.storage?.persist?.(); } catch {}
   if (!key) return showGate();
   try {
     const res = await api("/api/me");
@@ -944,5 +1039,6 @@ async function start() {
   renderInterests();
   loadNotify();
   flushActivity();
+  backfillOffline();
 }
 start();

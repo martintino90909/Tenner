@@ -54,6 +54,10 @@ Runs on each phone (`public/learn.js`); nothing leaves the device. Saves +3, ope
 
 The reader has a Listen button that reads the headline, intro, "why it matters" and the article aloud with the phone's built-in voice (best British voice available). It speaks a paragraph at a time, highlights it, and has back/next, pause, speed (1×, 1.25×, 1.5×, 0.85×) and stop; tap a paragraph to jump there. It keeps the screen awake while playing. Listening to most of a story counts as a long read for learning. Code: `public/listen.js`.
 
+## Offline
+
+The service worker (`public/sw.js`) keeps a copy of the app, network first, so Tenner opens with no signal and updates still arrive straight away online. Saving a story downloads its full text (and photo) into the phone's cache; the Saved list shows "Offline ready". Stories saved before this, or while offline, download next time the app is online. Unsaving removes the download.
+
 ## Checking the feeds
 
 Open `https://tenner.martintino90909.workers.dev/api/today?debug=1` to see every feed, whether it loaded, and how many stories it gave. To add or drop a source, edit `lib/sources.js`.
