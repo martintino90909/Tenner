@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { Store, cleanTopics } from "../lib/store.js";
-import { quotas, pickDeck, TOPIC_KEYS } from "../lib/pick.js";
+import { quotas, pickDeck, buildPool, TOPIC_KEYS, DEFAULT_TOPICS } from "../lib/pick.js";
 
 function makeStore() {
   const db = new DatabaseSync(":memory:");
@@ -21,7 +21,7 @@ test("create gives each person a unique private link", () => {
   const b = store.create({ name: "Liem" });
   assert.equal(a.name, "Alex");
   assert.ok(a.token.length >= 20 && a.token !== b.token);
-  assert.deepEqual(a.topics, TOPIC_KEYS);
+  assert.deepEqual(a.topics, DEFAULT_TOPICS, "Biomedical and Medicine are opt-in");
   assert.throws(() => store.create({ name: " " }), /name/);
 });
 
@@ -62,9 +62,10 @@ test("last used updates at most every 5 minutes; activity adds up", () => {
   assert.equal(store.activity(a.token, { swipes: 5 }), false);
 });
 
-test("topics are cleaned and default to all four", () => {
+test("topics are cleaned and default to the four general ones", () => {
   assert.deepEqual(cleanTopics(["cars", "nonsense", "cars"]), ["cars"]);
-  assert.deepEqual(cleanTopics([]), TOPIC_KEYS);
+  assert.deepEqual(cleanTopics([]), DEFAULT_TOPICS);
+  assert.deepEqual(cleanTopics(["bio", "med"]), ["bio", "med"]);
   const { store } = makeStore();
   const a = store.create({ name: "Alex", topics: ["tech", "world"] });
   assert.deepEqual(a.topics, ["tech", "world"]);
@@ -82,4 +83,19 @@ test("the daily ten only uses a person's topics", () => {
   const deck = pickDeck(pool, "2026-11-05", new Set(), 10, ["tech", "world"]);
   assert.equal(deck.length, 10);
   assert.ok(deck.every((s) => s.topic === "tech" || s.topic === "world"));
+});
+
+test("biomedical and medicine stories stay eligible for longer than general news", () => {
+  const now = Date.parse("2026-11-06T12:00:00Z");
+  const day = 24 * 60 * 60 * 1000;
+  const titles = { a: "Prime minister visits Leeds flood defences", b: "Gene therapy restores hearing in mice", c: "Enzyme discovery explains bacterial resistance", d: "NHS waiting lists fall for third month", e: "Junior doctors vote on new contract offer" };
+  const mk = (id, topic, ageDays) => ({ id, topic, source: `${topic} src`, title: titles[id], link: `https://x.test/${id}`, summary: "", image: "", published: now - ageDays * day });
+  const pool = buildPool([mk("a", "world", 2), mk("b", "bio", 5), mk("c", "bio", 7), mk("d", "med", 3), mk("e", "med", 5)], now);
+  assert.deepEqual(pool.map((p) => p.id).sort(), ["b", "d"]);
+});
+
+test("a medicine-only person gets ten medicine stories", () => {
+  const pool = Array.from({ length: 14 }, (_, i) => ({ id: `m${i}`, topic: "med", source: `med-${i % 5}`, title: `m ${i}` }));
+  const deck = pickDeck(pool, "2026-11-06", new Set(), 10, ["med"]);
+  assert.equal(deck.length, 10);
 });

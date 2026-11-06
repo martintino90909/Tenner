@@ -7,9 +7,11 @@ const TOPICS = {
   biz: { name: "Business & markets", short: "Business", c: "var(--t-biz)" },
   cars: { name: "Cars & motorsport", short: "Cars", c: "var(--t-cars)" },
   world: { name: "UK & world", short: "UK & world", c: "var(--t-world)" },
+  bio: { name: "Biomedical", short: "Biomed", c: "var(--t-bio)" },
+  med: { name: "Medicine & health", short: "Medicine", c: "var(--t-med)" },
 };
 const TOPIC_KEYS = Object.keys(TOPICS);
-const myTopics = () => (me?.topics?.length ? me.topics.filter((t) => TOPICS[t]) : deck?.topics?.length ? deck.topics : TOPIC_KEYS);
+const myTopics = () => (me?.topics?.length ? me.topics.filter((t) => TOPICS[t]) : deck?.topics?.length ? deck.topics : ["tech", "biz", "cars", "world"]);
 const K = { deck: "tenner.deck", saved: "tenner.saved", log: "tenner.log", install: "tenner.installDismissed", key: "tenner.key", pending: "tenner.pendingActivity" };
 const LOG_LIMIT = 2000;
 

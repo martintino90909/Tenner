@@ -13,6 +13,8 @@
   --t-biz: #0F7F5A;
   --t-cars: #C9531C;
   --t-world: #7246BF;
+  --t-bio: #A8367F;
+  --t-med: #0B7590;
   --shadow: 0 1px 2px rgb(22 32 28 / .06), 0 8px 24px rgb(22 32 28 / .10);
   --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
   --f-body: "Figtree", -apple-system, "Segoe UI", system-ui, sans-serif;
@@ -23,7 +25,7 @@
   :root {
     --bg: #0E1311; --surface: #19201D; --ink: #E7ECE9; --muted: #95A39C; --line: #2B3430;
     --accent: #5FC4B9; --accent-ink: #0B1F1C; --like: #4CC48E; --skip: #EB7A7A;
-    --t-tech: #7CA4F2; --t-biz: #4CC49A; --t-cars: #F08B57; --t-world: #B193EE;
+    --t-tech: #7CA4F2; --t-biz: #4CC49A; --t-cars: #F08B57; --t-world: #B193EE; --t-bio: #E68BC7; --t-med: #5CC3DC;
     --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 10px 28px rgb(0 0 0 / .45);
     color-scheme: dark;
   }

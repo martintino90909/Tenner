@@ -109,7 +109,10 @@ const TOPICS = {
   biz: { name: "Business & markets", c: "var(--t-biz)" },
   cars: { name: "Cars & motorsport", c: "var(--t-cars)" },
   world: { name: "UK & world", c: "var(--t-world)" },
+  bio: { name: "Biomedical", c: "var(--t-bio)" },
+  med: { name: "Medicine & health", c: "var(--t-med)" },
 };
+const DEFAULT_TOPICS = ["tech", "biz", "cars", "world"];
 const KEYS = Object.keys(TOPICS);
 const STORE_KEY = "tenner.adminKey";
 const $ = (id) => document.getElementById(id);
@@ -170,7 +173,7 @@ function chipsHTML(selected, dataAttr) {
 }
 
 /* ---------- add ---------- */
-$("add-topics").innerHTML = chipsHTML(KEYS, "topic");
+$("add-topics").innerHTML = chipsHTML(DEFAULT_TOPICS, "topic");
 $("add-topics").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-topic]"); if (!b) return;
   const on = b.getAttribute("aria-pressed") === "true";
@@ -188,7 +191,7 @@ $("add-form").addEventListener("submit", async (e) => {
   try {
     const { user } = await call("/api/admin/users", "POST", { name, topics });
     $("add-name").value = "";
-    $("add-topics").innerHTML = chipsHTML(KEYS, "topic");
+    $("add-topics").innerHTML = chipsHTML(DEFAULT_TOPICS, "topic");
     await refresh(user.id);
     toast(`Invite link ready for ${user.name}`);
   } catch (e2) { err.textContent = e2.message; err.hidden = false; }

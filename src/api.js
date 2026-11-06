@@ -3,7 +3,7 @@
 
 import { SOURCES } from "../lib/sources.js";
 import { parseFeed } from "../lib/rss.js";
-import { buildPool, pickDeck, londonDate, TOPIC_KEYS } from "../lib/pick.js";
+import { buildPool, pickDeck, londonDate, DEFAULT_TOPICS } from "../lib/pick.js";
 
 const UA = "Tenner/0.1 (personal news reader)";
 
@@ -38,7 +38,7 @@ async function loadPool(origin, now, date, debug, waitUntil) {
   return { pool, results };
 }
 
-export async function onRequestGet({ request, waitUntil, topics = TOPIC_KEYS }) {
+export async function onRequestGet({ request, waitUntil, topics = DEFAULT_TOPICS }) {
   const url = new URL(request.url);
   const debug = url.searchParams.has("debug");
   const now = new Date();

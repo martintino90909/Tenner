@@ -4,7 +4,7 @@ Ten news stories a day, as swipeable cards on your phone. Swipe right for intere
 
 ## What's in Phase 1
 
-- Live stories from free RSS feeds across four topics: tech & engineering, business & markets, cars & motorsport, UK & world
+- Live stories from free RSS feeds across six topics: tech & engineering, business & markets, cars & motorsport, UK & world, plus opt-in Biomedical and Medicine & health
 - A daily ten, split evenly across topics, with duplicates from different outlets merged
 - Swipe, open, save for later, and "deal 10 more" from the rest of the day's stories
 - Full articles readable inside the app (falls back to the original site when a story is paywalled)
