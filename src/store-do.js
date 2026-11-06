@@ -35,6 +35,15 @@ export class TennerStore extends DurableObject {
   markNotified(userId, dateStr) { return this.store.markNotified(userId, dateStr); }
   dropSub(endpoint) { return this.store.dropSub(endpoint); }
 
+  friends(token) { return this.store.friends(token); }
+  setMyTopics(token, topics) { return this.store.setMyTopics(token, topics); }
+  share(token, toIds, story, note) { return this.store.share(token, toIds, story, note); }
+  inbox(token) { return this.store.inbox(token); }
+  ack(token, ids) { return this.store.ack(token, ids); }
+  like(token, id, on) { return this.store.like(token, id, on); }
+  clearLikes(token) { return this.store.clearLikes(token); }
+  likeCounts(token, ids) { return this.store.likeCounts(token, ids); }
+
   list() { return this.store.list(); }
   create(input) { return this.store.create(input); }
   update(id, changes) { return this.store.update(id, changes); }

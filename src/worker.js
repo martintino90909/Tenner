@@ -12,6 +12,7 @@ import { handleTerms, handleExplain } from "./explain.js";
 import { handleArticle } from "./article.js";
 import { TennerStore, storeFor } from "./store-do.js";
 import { handlePush, runScheduled } from "./push.js";
+import { handleFriends } from "./friends.js";
 
 export { TennerStore };
 
@@ -106,6 +107,9 @@ export default {
 
       if (path === "/api/me" && request.method === "GET") return json({ name: user.name, topics: user.topics });
       if (path === "/api/push" || path.startsWith("/api/push/")) return handlePush(request, env, path, request.headers.get("x-tenner-key"));
+      if (["/api/friends", "/api/share", "/api/inbox", "/api/inbox/ack", "/api/likes", "/api/likes/clear", "/api/likes/counts", "/api/me/topics"].includes(path)) {
+        return handleFriends(request, env, ctx, path, request.headers.get("x-tenner-key"));
+      }
       if (path === "/api/today" && request.method === "GET") return today({ request, waitUntil, topics: user.topics });
       if (path === "/api/article" && request.method === "GET") return handleArticle(request, ctx);
       if (path === "/api/why" && request.method === "POST") return handleWhy(request, env, ctx);

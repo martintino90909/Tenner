@@ -82,6 +82,23 @@
           </div>
         </section>
 
+        <section class="card-panel" aria-labelledby="mytopics-h">
+          <div class="panel-head"><h2 class="panel-title" id="mytopics-h">Your topics</h2></div>
+          <p class="note">Tap to add or remove. Your ten refresh straight away.</p>
+          <div class="chips" id="my-topics"></div>
+        </section>
+
+        <section class="card-panel" aria-labelledby="friends-h">
+          <div class="panel-head"><h2 class="panel-title" id="friends-h">Friends</h2></div>
+          <label class="switch-row" for="share-likes">
+            <span>
+              <b>Count my likes in “Liked by friends”</b>
+              <small>Shares which stories you swipe right on or save, never your skips. Friends only ever see a number, never who.</small>
+            </span>
+            <input type="checkbox" id="share-likes" role="switch">
+          </label>
+        </section>
+
         <div>
           <h2 class="h2">What Tenner has learned</h2>
           <p class="lede" id="learn-lede">Swipe through today's cards and Tenner starts tailoring them to you.</p>
@@ -144,6 +161,23 @@
       <p class="gate-error" id="gate-error" role="alert" hidden></p>
       <button class="btn primary" type="submit">Sign in</button>
     </form>
+  </div>
+</div>
+
+<div class="send" id="send" role="dialog" aria-modal="true" aria-labelledby="send-h" hidden>
+  <div class="send-card">
+    <div class="panel-head">
+      <h2 class="panel-title" id="send-h">Send to a friend</h2>
+      <button class="icon-btn" id="send-close" aria-label="Cancel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <p class="send-story" id="send-story"></p>
+    <div class="send-friends" id="send-friends"></div>
+    <label class="send-label" for="send-note">Note (optional)</label>
+    <input id="send-note" type="text" maxlength="140" autocomplete="off" placeholder="e.g. This is the one I mentioned">
+    <p class="send-error" id="send-error" role="alert" hidden></p>
+    <button class="btn primary" id="send-go" disabled>Send</button>
   </div>
 </div>
 

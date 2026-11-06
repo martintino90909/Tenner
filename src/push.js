@@ -21,11 +21,11 @@ function londonTime(d = new Date()) {
   return new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d);
 }
 
-async function deliver(env, store, subs, payload) {
+export async function deliver(env, store, subs, payload, topic = "tenner-daily") {
   const vapid = await store.vapid();
   let sent = 0;
   for (const sub of subs) {
-    const r = await sendPush(sub, payload, vapid, { subject: site(env), topic: "tenner-daily" });
+    const r = await sendPush(sub, payload, vapid, { subject: site(env), topic });
     if (r.ok) sent++;
     else if (r.gone) await store.dropSub(sub.endpoint); // phone unsubscribed or app removed
     else console.warn("push failed", r.status, new URL(sub.endpoint).host, r.error || "");

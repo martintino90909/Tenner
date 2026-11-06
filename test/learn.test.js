@@ -103,3 +103,8 @@ test("listening to most of a story counts like a long read", () => {
   assert.equal(buildProfile([{ ...a, kind: "open" }, { ...a, kind: "listen", ms: 95000, done: 0.8 }], { now: NOW }).topic.med, 3);
   assert.equal(buildProfile([{ ...a, kind: "open" }, { ...a, kind: "listen", ms: 5000, done: 0.1 }], { now: NOW }).topic.med, 2);
 });
+
+test("sending a story to a friend counts like saving it", () => {
+  const a = { id: "q", topic: "bio", source: "STAT Biotech", kw: ["crispr"], t: NOW };
+  assert.equal(buildProfile([{ ...a, kind: "share" }], { now: NOW }).topic.bio, 3);
+});

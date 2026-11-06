@@ -39,7 +39,7 @@ export function buildProfile(log, { now = Date.now(), since = 0 } = {}) {
     meta.set(e.id, e.kw ? e : meta.get(e.id) || e);
     if (e.kind === "like" || e.kind === "skip") swipe.set(e.id, e);
     else if (e.kind === "undo") swipe.delete(e.id);
-    else if (e.kind === "save") saved.set(e.id, e);
+    else if (e.kind === "save" || e.kind === "share") saved.set(e.id, e); // sending a story to a friend counts like saving it
     else if (e.kind === "unsave") saved.delete(e.id);
     else if (e.kind === "open") { if (!opened.has(e.id)) meta.set(e.id + ":open", e); opened.add(e.id); }
     else if ((e.kind === "close" && ((e.ms || 0) >= 30000 || (e.depth || 0) >= 0.6)) ||

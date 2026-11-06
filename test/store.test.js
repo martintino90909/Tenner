@@ -139,3 +139,57 @@ test("settings are stored as JSON", () => {
   store.setSetting("vapid", { publicKey: "def" });
   assert.deepEqual(store.getSetting("vapid"), { publicKey: "def" });
 });
+
+const story = (n = 1) => ({ id: `st${n}`, title: `Story ${n}`, link: `https://www.bbc.co.uk/news/articles/x${n}`, summary: "Intro", topic: "cars", source: "BBC Sport F1", image: "javascript:alert(1)", extra: "dropped" });
+
+test("friends: list, send with a note, inbox once, and limits", () => {
+  const { store } = makeStore();
+  const m = store.create({ name: "Martin" });
+  const a = store.create({ name: "Alex" });
+  const l = store.create({ name: "Liem" });
+  store.update(l.id, { status: "paused" });
+  assert.deepEqual(store.friends(m.token).map((f) => f.name), ["Alex"], "paused people and yourself aren't listed");
+
+  const sent = store.share(m.token, [a.id, l.id, m.id], story(), "  Thought you'd like this   ");
+  assert.deepEqual(sent.recipients.map((r) => r.name), ["Alex"]);
+  assert.equal(sent.story.image, "", "unsafe image links are dropped");
+  assert.equal(sent.story.extra, undefined);
+  assert.equal(sent.note, "Thought you'd like this");
+
+  const box = store.inbox(a.token);
+  assert.equal(box.length, 1);
+  assert.equal(box[0].from, "Martin");
+  assert.equal(box[0].story.title, "Story 1");
+  store.ack(a.token, [box[0].id]);
+  assert.equal(store.inbox(a.token).length, 0, "delivered once");
+
+  assert.throws(() => store.share(m.token, [a.id], { ...story(), link: "https://evil.example/x" }), /news sources/);
+  assert.throws(() => store.share(m.token, [], story()), /at least one/);
+  for (let i = 0; i < 19; i++) store.share(m.token, [a.id], story(i + 2));
+  assert.throws(() => store.share(m.token, [a.id], story(99)), /20 stories a day/);
+});
+
+test("likes: counts are others-only and anonymous; clear and unlike work", () => {
+  const { store, tick } = makeStore();
+  const [m, a, b] = ["Martin", "Alex", "Bea"].map((name) => store.create({ name }));
+  store.like(a.token, "st1", true);
+  store.like(b.token, "st1", true);
+  store.like(b.token, "st1", true); // no double count
+  store.like(m.token, "st1", true);
+  store.like(a.token, "st2", true);
+  assert.deepEqual(store.likeCounts(m.token, ["st1", "st2", "st3"]), { st1: 2, st2: 1 });
+  assert.deepEqual(store.likeCounts(a.token, ["st1"]), { st1: 2 }, "your own like isn't counted");
+  store.like(b.token, "st1", false);
+  store.clearLikes(a.token);
+  assert.deepEqual(store.likeCounts(m.token, ["st1", "st2"]), {});
+  store.like(a.token, "st4", true);
+  tick(8 * 24 * 60 * 60 * 1000);
+  assert.deepEqual(store.likeCounts(m.token, ["st4"]), {}, "likes older than a week don't count");
+});
+
+test("people can set their own topics", () => {
+  const { store } = makeStore();
+  const a = store.create({ name: "Sophia" });
+  assert.deepEqual(store.setMyTopics(a.token, ["bio", "med", "nope"]), ["bio", "med"]);
+  assert.deepEqual(store.auth(a.token).topics, ["bio", "med"]);
+});

@@ -15,7 +15,7 @@ const TOPICS = {
 };
 const TOPIC_KEYS = Object.keys(TOPICS);
 const myTopics = () => (me?.topics?.length ? me.topics.filter((t) => TOPICS[t]) : deck?.topics?.length ? deck.topics : ["tech", "biz", "cars", "world"]);
-const K = { deck: "tenner.deck", saved: "tenner.saved", log: "tenner.log", install: "tenner.installDismissed", key: "tenner.key", pending: "tenner.pendingActivity", adjust: "tenner.adjust", since: "tenner.learnSince", termHint: "tenner.termHintSeen" };
+const K = { deck: "tenner.deck", saved: "tenner.saved", log: "tenner.log", install: "tenner.installDismissed", key: "tenner.key", pending: "tenner.pendingActivity", adjust: "tenner.adjust", since: "tenner.learnSince", termHint: "tenner.termHintSeen", shareLikes: "tenner.shareLikes" };
 const LOG_LIMIT = 2000;
 
 /* ---------- storage ---------- */
@@ -136,9 +136,12 @@ async function ensureDeck(force = false) {
     const data = await fetchToday();
     const pool = data.pool || [];
     const ten = pickTen(pool, data.deck);
+    // Stories friends sent today that haven't been swiped yet stay at the front.
+    const carry = deck?.date === data.date ? deck.cards.slice(deck.index).filter((c) => c.from) : [];
+    const cards = [...carry, ...ten.cards.filter((c) => !carry.some((x) => x.id === c.id))];
     deck = {
-      date: data.date, topics: data.topics, cards: ten.cards, wildcards: ten.wildcards, personalised: ten.personalised,
-      pool, index: 0, results: {}, shown: ten.cards.map((c) => c.id), round: 1,
+      date: data.date, topics: data.topics, cards, wildcards: ten.wildcards, personalised: ten.personalised,
+      pool, index: 0, results: {}, shown: cards.map((c) => c.id), round: 1, friendLikes: deck?.friendLikes || {},
     };
     store(K.deck, deck);
     renderAll();
@@ -156,6 +159,7 @@ function dealMore() {
     Object.assign(deck, { cards: ten.cards, wildcards: ten.wildcards, index: 0, results: {}, round: (deck.round || 1) + 1 });
     deck.shown.push(...ten.cards.map((s) => s.id));
     store(K.deck, deck);
+    refreshFriendLikes();
     return renderAll();
   }
   const byTopic = {};
@@ -234,7 +238,8 @@ function cardHTML(s, i) {
       <span class="stamp no">Not for me</span>
     </div>
     <div class="body">
-      <div class="meta"><span>${esc(s.source)}</span>${s.published ? `<span>·</span><span>${ago(s.published)}</span>` : ""}${deck?.wildcards?.includes(s.id) ? `<span class="wild-tag" title="Something outside your usual picks">Wildcard</span>` : ""}</div>
+      <div class="meta"><span>${esc(s.source)}</span>${s.published ? `<span>·</span><span>${ago(s.published)}</span>` : ""}${deck?.wildcards?.includes(s.id) ? `<span class="wild-tag" title="Something outside your usual picks">Wildcard</span>` : ""}${friendBadge(s)}</div>
+      ${s.from ? `<p class="from-note"><b>From ${esc(s.from)}</b>${s.note ? ` · \u201C${esc(s.note)}\u201D` : ""}</p>` : ""}
       <h2 class="headline">${esc(s.title)}</h2>
       ${s.summary ? `<p class="summary">${esc(s.summary)}</p>` : ""}
       <div class="why" data-why="${esc(s.id)}">${whyHTML(s)}</div>
@@ -394,6 +399,7 @@ function decide(kind, card) {
   card.style.opacity = "0";
   record(story, kind, { ms: Date.now() - shownAt });
   deck.results[story.id] = kind;
+  reportLike(story);
   deck.index++;
   store(K.deck, deck);
   setTimeout(() => { busy = false; renderStack(); renderPips(); renderInterests(); }, 260);
@@ -407,6 +413,7 @@ function goBack() {
   const prev = deck.results[story.id];
   delete deck.results[story.id];
   record(story, "undo");
+  reportLike(story);
   store(K.deck, deck);
   renderStack();
   renderPips();
@@ -520,6 +527,7 @@ function toggleSave(story) {
     toast("Removed from saved");
   }
   store(K.saved, saved);
+  reportLike(story);
   renderSaved();
   renderInterests();
 }
@@ -811,6 +819,7 @@ function openSheet(story) {
     <div class="reader-bar">
       <button class="icon-btn" id="reader-close" aria-label="Back to cards">${CLOSE}</button>
       <div class="reader-src"><span style="color:${tp.c}">${esc(tp.short)}</span> · ${esc(story.source)} · <span id="reader-time">${story.published ? ago(story.published) : ""}</span></div>
+      <button class="icon-btn" id="reader-send" aria-label="Send to a friend">${SEND}</button>
       <button class="icon-btn save-toggle" id="reader-save" aria-label="Save for later" aria-pressed="false">${BOOKMARK}</button>
     </div>
     <div class="reader-scroll" id="reader-scroll">
@@ -859,6 +868,7 @@ function openSheet(story) {
   loadArticle(story);
   wireListen(story);
   wireExplain(story);
+  $("reader-send").onclick = () => openSend(story);
   $("reader-close").focus();
 }
 
@@ -913,10 +923,155 @@ function renderSaved() {
   }));
 }
 
+/* ---------- friends ---------- */
+const SEND = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M21 3L10.5 13.5"/><path d="M21 3l-6.5 18-4-7.5L3 9.5 21 3z"/></svg>`;
+const shareLikes = () => load(K.shareLikes, true) !== false;
+let friendsList = null;
+
+function friendBadge(s) {
+  const n = deck?.friendLikes?.[s.id] || 0;
+  return n >= 2 ? `<span class="friends-tag">Liked by ${n} friends</span>` : "";
+}
+
+// Tells the server whether you currently like a story (swiped right or saved).
+function reportLike(story) {
+  if (!key || !shareLikes() || !navigator.onLine) return;
+  const on = deck?.results?.[story.id] === "like" || saved.some((x) => x.id === story.id);
+  api("/api/likes", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: story.id, on }) }).catch(() => {});
+}
+
+async function refreshFriendLikes() {
+  if (!deck?.cards?.length || !navigator.onLine) return;
+  try {
+    const res = await api("/api/likes/counts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids: deck.cards.map((c) => c.id) }) });
+    if (!res.ok) return;
+    deck.friendLikes = (await res.json()).counts || {};
+    store(K.deck, deck);
+    renderStack();
+  } catch {}
+}
+
+// Stories friends sent: they become your very next cards.
+async function checkInbox() {
+  if (!key || !deck || !navigator.onLine) return;
+  try {
+    const res = await api("/api/inbox");
+    if (!res.ok) return;
+    const { items = [] } = await res.json();
+    if (!items.length) return;
+    const at = Math.min(deck.index, deck.cards.length);
+    const incoming = [];
+    for (const it of items) {
+      const story = { ...it.story, from: it.from, note: it.note || "" };
+      const existing = deck.cards.findIndex((c, i) => c.id === story.id && i >= deck.index);
+      if (existing >= 0) deck.cards.splice(existing, 1);
+      incoming.push(story);
+      if (!deck.shown.includes(story.id)) deck.shown.push(story.id);
+    }
+    deck.cards.splice(at, 0, ...incoming);
+    store(K.deck, deck);
+    await api("/api/inbox/ack", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids: items.map((i) => i.id) }) });
+    renderAll();
+    const names = [...new Set(items.map((i) => i.from))];
+    toast(items.length === 1 ? `${names[0]} sent you a story. It's up next.` : `${items.length} stories from ${names.join(" and ")} are up next.`);
+  } catch {}
+}
+
+/* send sheet */
+let sending = null;
+async function openSend(story) {
+  sending = { story, to: new Set() };
+  $("send-story").textContent = story.title;
+  $("send-note").value = "";
+  $("send-error").hidden = true;
+  $("send-go").disabled = true;
+  $("send-go").textContent = "Send";
+  $("send").hidden = false;
+  const box = $("send-friends");
+  if (!navigator.onLine) { box.innerHTML = `<p class="note">You're offline. Sending needs a connection.</p>`; return; }
+  box.innerHTML = `<p class="note">Loading your friends…</p>`;
+  try {
+    if (!friendsList) friendsList = (await (await api("/api/friends")).json()).friends || [];
+    box.innerHTML = friendsList.length
+      ? friendsList.map((f) => `<button type="button" class="friend" data-id="${esc(f.id)}" aria-pressed="false"><span class="avatar">${esc(f.name.slice(0, 1).toUpperCase())}</span>${esc(f.name)}</button>`).join("")
+      : `<p class="note">No one else is on Tenner yet.</p>`;
+  } catch (err) {
+    if (!(err instanceof SignInError)) box.innerHTML = `<p class="note">Couldn't load your friends. Try again in a moment.</p>`;
+  }
+}
+function closeSend() { $("send").hidden = true; sending = null; }
+$("send-close").onclick = closeSend;
+$("send").addEventListener("click", (e) => { if (e.target === $("send")) closeSend(); });
+$("send-friends").addEventListener("click", (e) => {
+  const b = e.target.closest(".friend");
+  if (!b || !sending) return;
+  const on = b.getAttribute("aria-pressed") !== "true";
+  b.setAttribute("aria-pressed", String(on));
+  on ? sending.to.add(b.dataset.id) : sending.to.delete(b.dataset.id);
+  $("send-go").disabled = !sending.to.size;
+  $("send-go").textContent = sending.to.size > 1 ? `Send to ${sending.to.size} friends` : "Send";
+});
+$("send-go").onclick = async () => {
+  if (!sending?.to.size) return;
+  const btn = $("send-go");
+  btn.disabled = true;
+  try {
+    const res = await api("/api/share", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ to: [...sending.to], story: sending.story, note: $("send-note").value }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || "Couldn't send it");
+    record(sending.story, "share");
+    closeSend();
+    toast(`Sent to ${data.sent.join(" and ")}`);
+  } catch (err) {
+    if (err instanceof SignInError) return;
+    $("send-error").textContent = err.message;
+    $("send-error").hidden = false;
+    btn.disabled = false;
+  }
+};
+
+/* your topics + likes switch (You tab) */
+function renderMyTopics() {
+  const mine = myTopics();
+  $("my-topics").innerHTML = TOPIC_KEYS.map((t) =>
+    `<button type="button" class="chip-toggle" style="--c:${TOPICS[t].c}" data-t="${t}" aria-pressed="${mine.includes(t)}"><i></i>${TOPICS[t].name}</button>`).join("");
+  $("share-likes").checked = shareLikes();
+}
+$("my-topics").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-t]");
+  if (!b) return;
+  const t = b.dataset.t;
+  const mine = myTopics();
+  const next = mine.includes(t) ? mine.filter((x) => x !== t) : [...mine, t];
+  if (!next.length) return toast("Keep at least one topic");
+  if (!navigator.onLine) return toast("You're offline. Change topics when you have signal.");
+  try {
+    const res = await api("/api/me/topics", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ topics: next }) });
+    if (!res.ok) throw new Error();
+    me = { ...(me || {}), topics: (await res.json()).topics };
+    renderMyTopics();
+    await ensureDeck(true);
+    toast(mine.includes(t) ? `${TOPICS[t].short} removed. Here's a fresh ten.` : `${TOPICS[t].short} added. Here's a fresh ten.`);
+  } catch (err) {
+    if (!(err instanceof SignInError)) toast("Couldn't save your topics. Try again.");
+  }
+});
+$("share-likes").addEventListener("change", () => {
+  const on = $("share-likes").checked;
+  store(K.shareLikes, on);
+  if (!on) api("/api/likes/clear", { method: "POST" }).catch(() => {});
+  toast(on ? "Your likes now count towards “Liked by friends”" : "Your likes are no longer shared, and past ones are cleared");
+});
+
 /* ---------- You: what Tenner has learned ---------- */
 const ADJ_LABEL = { less: "Less", auto: "Auto", more: "More" };
 
 function renderInterests() {
+  renderMyTopics();
   const p = profileNow();
   const learning = p.decisions >= COLD_START;
   const left = Math.max(0, COLD_START - p.decisions);
@@ -1107,7 +1262,8 @@ $("notify-test").onclick = async () => {
 
 // Tapping a notification while Tenner is open: make sure today's ten are loaded.
 navigator.serviceWorker?.addEventListener("message", (e) => {
-  if (e.data?.type === "tenner:refresh" && deck?.date !== londonDate()) ensureDeck(true);
+  if (e.data?.type !== "tenner:refresh") return;
+  (deck?.date !== londonDate() ? ensureDeck(true) : Promise.resolve()).then(checkInbox);
 });
 
 /* ---------- tabs, install hint, day change ---------- */
@@ -1123,7 +1279,8 @@ if (isIOS && !standalone && !load(K.install, false)) $("install").hidden = false
 $("install-close").onclick = () => { $("install").hidden = true; store(K.install, true); };
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && deck && deck.date !== londonDate()) ensureDeck(true);
+  if (document.visibilityState !== "visible" || !key) return;
+  (deck && deck.date !== londonDate() ? ensureDeck(true) : Promise.resolve()).then(() => { checkInbox(); refreshFriendLikes(); });
 });
 
 function renderAll() { renderStack(); renderPips(); renderSaved(); renderInterests(); }
@@ -1176,6 +1333,8 @@ async function start() {
   renderInterests();
   await ensureDeck();
   renderInterests();
+  await checkInbox();
+  refreshFriendLikes();
   loadNotify();
   flushActivity();
   backfillOffline();

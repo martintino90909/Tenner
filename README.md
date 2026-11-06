@@ -38,7 +38,7 @@ Live at https://tenner.martintino90909.workers.dev
 
 ## Accounts
 
-Tenner is invite-only. Each person gets a personal link (`/u/<key>`); opening it signs them in on that phone, and adding it to the Home Screen keeps them signed in. Saved stories and swipes stay on each person's phone; the server only keeps their name, topics, status and usage counts.
+Tenner is invite-only. Each person gets a personal link (`/u/<key>`); opening it signs them in on that phone, and adding it to the Home Screen keeps them signed in. Saved stories, skips and learning stay on each person's phone; the server keeps their name, topics, status, usage counts, notification subscriptions, stories sent between friends, and (if they allow it) which stories they liked.
 
 Manage people at `/admin`: add someone (pick their topics), copy their invite message, pause or resume them, make a new link (the old one stops working), or remove them. The admin key is not in this repo; only its SHA-256 hash is (`ADMIN_KEY_SHA256` in `wrangler.jsonc`). To change the key, put the hash of a new random key there and redeploy.
 
@@ -61,6 +61,12 @@ The service worker (`public/sw.js`) keeps a copy of the app, network first, so T
 ## Explain this
 
 When an article opens, `/api/terms` asks Workers AI for up to 6 jargon terms with one-line plain-English explanations; the reader underlines the first use of each, and tapping one shows the explanation. Highlighting any words (up to 8) shows an Explain button that calls `/api/explain` with the surrounding paragraph. Both are cached and shared for a week, so an article's terms are generated once for everyone. Saved stories keep their terms for offline reading. Prompts and parsing: `lib/explain.js`.
+
+## Friends
+
+- **Send a story:** the paper-plane button in the reader opens a list of everyone else on Tenner; pick friends and add an optional note (up to 140 characters, 20 sends a day). The story becomes their next card, marked "From <name>", and they get a notification if they have them on. Only links to Tenner's own news sources can be sent.
+- **Liked by friends:** if someone allows it (switch on the You tab, on by default), the ids of stories they swipe right on or save are stored for 7 days. Cards show "Liked by N friends" when two or more *other* people liked them. Never names, never skips. Turning the switch off deletes that person's stored likes.
+- **Your topics:** everyone can add or remove topics on the You tab; changes from the admin page still apply and win if made later.
 
 ## Checking the feeds
 

@@ -101,7 +101,7 @@ self.addEventListener("push", (event) => {
       body: data.body || "Today's stories are waiting.",
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",
-      tag: "tenner-daily",
+      tag: data.tag || "tenner-daily",
       data: { url: data.url || "/" },
     })
   );
